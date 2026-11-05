@@ -105,7 +105,8 @@ class MemoWindow : Window
     HwndSource source;
     DateTime stampDoc = DateTime.MinValue, stampTasks = DateTime.MinValue;
 
-    bool collapsed, hidden, autoHide = true;
+    bool collapsed, hidden, autoHide = true, voiceWake = true;
+    System.Speech.Recognition.SpeechRecognitionEngine speech;
     DateTime hideAt = DateTime.MaxValue;
     double opacity = 1.0;
     bool snapTop, snapRight, snapBottom, snapLeft;
@@ -177,11 +178,59 @@ class MemoWindow : Window
             source.AddHook(WndProc);
             try { RegisterHotKey(new WindowInteropHelper(this).Handle, 1, 3, (uint)Key.N); } catch { }
             LoadWeather();
+            if (voiceWake) StartVoice();
             var weatherTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(30) };
             weatherTimer.Tick += delegate { LoadWeather(); };
             weatherTimer.Start();
         };
-        Closed += delegate { try { UnregisterHotKey(new WindowInteropHelper(this).Handle, 1); } catch { } SaveState(); };
+        Closed += delegate { StopVoice(); try { UnregisterHotKey(new WindowInteropHelper(this).Handle, 1); } catch { } SaveState(); };
+    }
+
+    void StartVoice()
+    {
+        try
+        {
+            if (speech != null) return;
+            System.Speech.Recognition.RecognizerInfo info = null;
+            foreach (var r in System.Speech.Recognition.SpeechRecognitionEngine.InstalledRecognizers())
+                if (r.Culture.Name.StartsWith("zh")) { info = r; break; }
+            if (info == null) { Log("voice: 没有中文语音识别引擎"); return; }
+
+            speech = new System.Speech.Recognition.SpeechRecognitionEngine(info);
+            var choices = new System.Speech.Recognition.Choices();
+            choices.Add(new string[] { "芝麻开门", "芝麻开门口令", "打开日报", "日报出来", "小窗出来", "日报小窗" });
+            var gb = new System.Speech.Recognition.GrammarBuilder(choices);
+            speech.LoadGrammar(new System.Speech.Recognition.Grammar(gb));
+            speech.SpeechRecognized += delegate(object s2, System.Speech.Recognition.SpeechRecognizedEventArgs e2)
+            {
+                if (e2.Result == null) return;
+                double conf = e2.Result.Confidence;
+                Log("voice: '" + e2.Result.Text + "' conf=" + conf.ToString("0.00"));
+                if (conf < 0.55) return;
+                Dispatcher.BeginInvoke((Action)delegate
+                {
+                    SetCollapsed(false);
+                    ShowWindow();
+                    Activate();
+                    quickInput.Focus();
+                });
+            };
+            speech.SpeechRecognitionRejected += delegate(object s2, System.Speech.Recognition.SpeechRecognitionRejectedEventArgs e2)
+            {
+                if (e2.Result != null && e2.Result.Confidence > 0.4)
+                    Log("voice rejected: '" + e2.Result.Text + "' conf=" + e2.Result.Confidence.ToString("0.00"));
+            };
+            speech.SetInputToDefaultAudioDevice();
+            speech.RecognizeAsync(System.Speech.Recognition.RecognizeMode.Multiple);
+            Log("voice: 监听中（芝麻开门）");
+        }
+        catch (Exception ex) { Log("voice error: " + ex.Message); speech = null; }
+    }
+
+    void StopVoice()
+    {
+        try { if (speech != null) { speech.RecognizeAsyncStop(); speech.Dispose(); speech = null; Log("voice: 已停止"); } }
+        catch { }
     }
 
     void LoadWeather()
@@ -296,6 +345,10 @@ class MemoWindow : Window
         var hide = new MenuItem { Header = "贴边自动隐藏", IsCheckable = true, IsChecked = autoHide };
         hide.Click += delegate { autoHide = hide.IsChecked; if (!autoHide) ShowWindow(); SaveState(); };
         menu.Items.Add(hide);
+
+        var voice = new MenuItem { Header = "语音唤出（说「芝麻开门」）", IsCheckable = true, IsChecked = voiceWake };
+        voice.Click += delegate { voiceWake = voice.IsChecked; if (voiceWake) StartVoice(); else StopVoice(); SaveState(); };
+        menu.Items.Add(voice);
         var opacityMenu = new MenuItem { Header = "透明度" };
         double[] levels = new double[] { 1.0, 0.92, 0.8, 0.6 };
         foreach (var level in levels)
@@ -348,7 +401,7 @@ class MemoWindow : Window
     // ---------- autohide ----------
     void AutoHideTick()
     {
-        if (!autoHide || !Docked || dragging) return;
+        if (!autoHide || !Docked || dragging || collapsed) return;
         POINT p;
         if (!GetCursorPos(out p)) return;
         double scale = VisualTreeHelper.GetDpi(this).DpiScaleX;
@@ -741,6 +794,7 @@ class MemoWindow : Window
             if (l > -10000 && t > -10000 && (l != 0 || t != 0)) { Left = l; Top = t; }
             autoHide = GetBool(json, "AutoHide", true);
             opacity = GetDouble(json, "Opacity", 1.0);
+            voiceWake = GetBool(json, "VoiceWake", true);
         }
         catch { }
     }
@@ -790,10 +844,20 @@ class MemoWindow : Window
         try
         {
             var sb = new StringBuilder();
-            sb.Append("{\"Left\":").Append((int)Left)
-              .Append(",\"Top\":").Append((int)Top)
+            double saveLeft = Left, saveTop = Top;
+            if (hidden)
+            {
+                var wa = SystemParameters.WorkArea;
+                if (snapRight) saveLeft = wa.Right - ActualWidth;
+                if (snapLeft) saveLeft = wa.Left;
+                if (snapTop) saveTop = wa.Top;
+                if (snapBottom) saveTop = wa.Bottom - ActualHeight;
+            }
+            sb.Append("{\"Left\":").Append((int)saveLeft)
+              .Append(",\"Top\":").Append((int)saveTop)
               .Append(",\"Opacity\":").Append(opacity.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture))
               .Append(",\"AutoHide\":").Append(autoHide ? "true" : "false")
+              .Append(",\"VoiceWake\":").Append(voiceWake ? "true" : "false")
               .Append("}");
             File.WriteAllText(StatePath, sb.ToString(), Utf8);
         }
