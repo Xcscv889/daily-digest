@@ -62,8 +62,13 @@ class MemoWindow : Window
         <ColumnDefinition Width='Auto'/><ColumnDefinition Width='Auto'/><ColumnDefinition Width='Auto'/>
       </Grid.ColumnDefinitions>
       <Ellipse Grid.Column='0' Width='7' Height='7' Margin='16,0,8,0' VerticalAlignment='Center' Fill='#FF74A9D4'/>
-      <TextBlock Name='TitleText' Grid.Column='1' VerticalAlignment='Center' FontSize='13' FontWeight='SemiBold'
-                 Foreground='#FFE9F0F7' Text='日报' TextTrimming='CharacterEllipsis'/>
+      <Grid Grid.Column='1'>
+        <TextBlock Name='TitleText' HorizontalAlignment='Left' VerticalAlignment='Center' FontSize='13' FontWeight='SemiBold'
+                   Foreground='#FFE9F0F7' Text='日报' TextTrimming='CharacterEllipsis' MaxWidth='150'/>
+
+      </Grid>
+      <Grid Name='ClockHost' Grid.Column='0' Grid.ColumnSpan='5' HorizontalAlignment='Center'
+            VerticalAlignment='Center' IsHitTestVisible='False'/>
       <TextBlock Name='WeatherText' Grid.Column='2' VerticalAlignment='Center' FontSize='11'
                  Foreground='#96AABE' Margin='0,0,10,0'/>
       <Button Name='RefreshBtn' Grid.Column='3' Content='⟳' Width='26' Height='26' Margin='0,0,2,0'
@@ -95,7 +100,8 @@ class MemoWindow : Window
     Border card;
     Grid header;
     StackPanel bodyPanel;
-    TextBlock titleText, quickHint, weatherText;
+    TextBlock titleText, quickHint, weatherText, petText;
+    Clock7 clock7;
     TextBox quickInput;
     Grid inputRow;
     Button foldBtn, refreshBtn;
@@ -115,6 +121,7 @@ class MemoWindow : Window
     public MemoWindow()
     {
         WindowStyle = WindowStyle.None;
+        ResizeMode = ResizeMode.NoResize;
         AllowsTransparency = true;
         Background = Brushes.Transparent;
         ShowInTaskbar = false;
@@ -129,6 +136,11 @@ class MemoWindow : Window
         bodyPanel = (StackPanel)card.FindName("BodyPanel");
         titleText = (TextBlock)card.FindName("TitleText");
         weatherText = (TextBlock)card.FindName("WeatherText");
+        var clockHost = (Grid)card.FindName("ClockHost");
+        clock7 = new Clock7();
+        petText = new TextBlock { Foreground = new SolidColorBrush(Color.FromRgb(150, 170, 190)), FontSize = 12, Visibility = Visibility.Collapsed };
+        clockHost.Children.Add(clock7);
+        clockHost.Children.Add(petText);
         quickInput = (TextBox)card.FindName("QuickInput");
         inputRow = (Grid)quickInput.Parent;
         quickHint = (TextBlock)card.FindName("QuickHint");
@@ -167,6 +179,17 @@ class MemoWindow : Window
         autoTimer.Tick += delegate { AutoHideTick(); };
         autoTimer.Start();
 
+        StateChanged += delegate
+        {
+            if (WindowState != WindowState.Normal)
+            {
+                WindowState = WindowState.Normal;
+                Width = 360;
+                Snap();
+                Log("window state reset to normal");
+            }
+        };
+
         Loaded += delegate
         {
             var wa = SystemParameters.WorkArea;
@@ -177,6 +200,7 @@ class MemoWindow : Window
             source = (HwndSource)PresentationSource.FromVisual(this);
             source.AddHook(WndProc);
             try { RegisterHotKey(new WindowInteropHelper(this).Handle, 1, 3, (uint)Key.N); } catch { }
+            StartClock();
             LoadWeather();
             if (voiceWake) StartVoice();
             var weatherTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(30) };
@@ -184,6 +208,38 @@ class MemoWindow : Window
             weatherTimer.Start();
         };
         Closed += delegate { StopVoice(); try { UnregisterHotKey(new WindowInteropHelper(this).Handle, 1); } catch { } SaveState(); };
+    }
+
+    bool showPet;
+    DispatcherTimer clockTimer;
+    int petFrame;
+    static readonly string[] PetFrames = new string[] {
+        "(•‿•)", "(•_•)", "(¬‿¬)", "(・ω・)", "(￣▽￣)", "(´･ω･`)", "(＾▽＾)"
+    };
+
+    void StartClock()
+    {
+        clockTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) };
+        clockTimer.Tick += delegate
+        {
+            if (clock7 == null) return;
+            if (showPet)
+            {
+                petFrame = (petFrame + 1) % PetFrames.Length;
+                clock7.Visibility = Visibility.Collapsed;
+                petText.Text = PetFrames[petFrame];
+                petText.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                petText.Visibility = Visibility.Collapsed;
+                clock7.Visibility = Visibility.Visible;
+                clock7.Value = DateTime.Now.ToString("HH:mm");
+                clock7.InvalidateMeasure();
+                clock7.InvalidateVisual();
+            }
+        };
+        clockTimer.Start();
     }
 
     void StartVoice()
@@ -345,6 +401,10 @@ class MemoWindow : Window
         var hide = new MenuItem { Header = "贴边自动隐藏", IsCheckable = true, IsChecked = autoHide };
         hide.Click += delegate { autoHide = hide.IsChecked; if (!autoHide) ShowWindow(); SaveState(); };
         menu.Items.Add(hide);
+
+        var pet = new MenuItem { Header = "显示小宠物（代替时间）", IsCheckable = true, IsChecked = showPet };
+        pet.Click += delegate { showPet = pet.IsChecked; SaveState(); };
+        menu.Items.Add(pet);
 
         var voice = new MenuItem { Header = "语音唤出（说「芝麻开门」）", IsCheckable = true, IsChecked = voiceWake };
         voice.Click += delegate { voiceWake = voice.IsChecked; if (voiceWake) StartVoice(); else StopVoice(); SaveState(); };
@@ -795,6 +855,7 @@ class MemoWindow : Window
             autoHide = GetBool(json, "AutoHide", true);
             opacity = GetDouble(json, "Opacity", 1.0);
             voiceWake = GetBool(json, "VoiceWake", true);
+            showPet = GetBool(json, "ShowPet", false);
         }
         catch { }
     }
@@ -858,9 +919,75 @@ class MemoWindow : Window
               .Append(",\"Opacity\":").Append(opacity.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture))
               .Append(",\"AutoHide\":").Append(autoHide ? "true" : "false")
               .Append(",\"VoiceWake\":").Append(voiceWake ? "true" : "false")
+              .Append(",\"ShowPet\":").Append(showPet ? "true" : "false")
               .Append("}");
             File.WriteAllText(StatePath, sb.ToString(), Utf8);
         }
         catch { }
+    }
+}
+
+class Clock7 : FrameworkElement
+{
+    public string Value = "";
+    static readonly int[] Patterns = new int[] { 63, 6, 91, 79, 102, 109, 125, 7, 127, 111 };
+    static readonly Brush On = Freeze(new SolidColorBrush(Color.FromRgb(140, 225, 175)));
+    static readonly Brush Off = Freeze(new SolidColorBrush(Color.FromArgb(28, 150, 170, 190)));
+
+    static Brush Freeze(Brush b) { b.Freeze(); return b; }
+
+    const double W = 10, H = 18, T = 2.0, GAP = 4.5, COLON = 4;
+
+    double TotalWidth()
+    {
+        double x = 0;
+        foreach (char ch in Value)
+            x += ch == ':' ? COLON + GAP : W + GAP;
+        return Math.Max(0, x - GAP);
+    }
+
+    protected override Size MeasureOverride(Size availableSize)
+    {
+        return new Size(TotalWidth(), H);
+    }
+
+    protected override void OnRender(DrawingContext dc)
+    {
+        double x = 0;
+        foreach (char ch in Value)
+        {
+            if (ch == ':')
+            {
+                dc.DrawRectangle(On, null, new Rect(x, 4, T, T));
+                dc.DrawRectangle(On, null, new Rect(x, H - 4 - T, T, T));
+                x += COLON + GAP;
+            }
+            else if (ch >= '0' && ch <= '9')
+            {
+                DrawDigit(dc, x, Patterns[ch - '0']);
+                x += W + GAP;
+            }
+            else x += GAP;
+        }
+    }
+
+    static void DrawDigit(DrawingContext dc, double x, double mask)
+    {
+        double midY = (H - T) / 2;
+        double half = (H - T) / 2 - T;
+        int m = (int)mask;
+        Seg(dc, x + T, 0, W - 2 * T, T, (m & 1) != 0);              // a 上
+        Seg(dc, x + W - T, T, T, half, (m & 2) != 0);                // b 右上
+        Seg(dc, x + W - T, (H + T) / 2, T, half, (m & 4) != 0);      // c 右下
+        Seg(dc, x + T, H - T, W - 2 * T, T, (m & 8) != 0);           // d 下
+        Seg(dc, x, (H + T) / 2, T, half, (m & 16) != 0);             // e 左下
+        Seg(dc, x, T, T, half, (m & 32) != 0);                       // f 左上
+        Seg(dc, x + T, midY, W - 2 * T, T, (m & 64) != 0);           // g 中
+    }
+
+    static void Seg(DrawingContext dc, double x, double y, double w, double h, bool on)
+    {
+        if (!on) return;
+        dc.DrawRectangle(On, null, new Rect(x, y, w, h));
     }
 }

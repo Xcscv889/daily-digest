@@ -83,7 +83,8 @@ claude plugin install daily-digest@local
 - 编译版位于 `scripts/native/DailyMemoWpf.exe`，界面用 XAML 字符串在运行时解析，单文件无依赖
 - 需要 .NET Framework 4.8（Windows 10/11 自带）
 - 贴边吸附、3 秒自动隐藏、`Ctrl+Alt+N` 或**语音「芝麻开门」**唤出
-- 标题栏显示今天的日期和实时天气（Open-Meteo，离线识别不联网）
+- 不可缩放，误触最大化会自动还原
+- 标题栏：今天的日期、居中的七段数码管时钟（可切换成 ASCII 小宠物）、实时天气（Open-Meteo）
 - 待办：回车新增、双击勾选、悬停 × 删除
 - 内容顺序：今天要做的 → 今天先问自己 → 昨天一行摘要
 
@@ -102,10 +103,10 @@ csc -nologo -target:winexe -optimize+ ^
 
 `scripts/native/DailyMemoWpf.exe` 是编译产物，直接提交进仓库是为了免去用户自己装编译器。它由同目录的 `MemoWpf.cs` 编译而来，没有任何依赖，也可以自己重新编译后替换。
 
-SHA256（v4.5.0）：
+SHA256（v4.6.0）：
 
 ```
-F5FAE56AF8C088F97AF2BD30847452FC9BFF4E75DD6105D278305288EB9B3858
+A3DA5A6E53D57E87A4E8499D434A9D16D8036C3FD7E465DD504B6DC81FCF926C
 ```
 
 不想运行现成二进制的话，按上面的 csc 命令编译，或者直接用 `scripts/memo.ps1`（PowerShell 版，功能相同但内存约 270 MB）。
