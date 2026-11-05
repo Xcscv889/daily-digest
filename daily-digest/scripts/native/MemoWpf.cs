@@ -111,7 +111,7 @@ class MemoWindow : Window
     HwndSource source;
     DateTime stampDoc = DateTime.MinValue, stampTasks = DateTime.MinValue;
 
-    bool collapsed, hidden, autoHide = true, voiceWake = true;
+    bool collapsed, hidden, autoHide = true, voiceWake = true, stateDirty;
     System.Speech.Recognition.SpeechRecognitionEngine speech;
     DateTime hideAt = DateTime.MaxValue;
     double opacity = 1.0;
@@ -160,7 +160,7 @@ class MemoWindow : Window
         };
         header.MouseRightButtonUp += delegate { menu.IsOpen = true; };
         refreshBtn.Click += delegate { Render(); };
-        foldBtn.Click += delegate { SetCollapsed(!collapsed); SaveState(); };
+        foldBtn.Click += delegate { SetCollapsed(!collapsed); };
 
         quickInput.TextChanged += delegate
         {
@@ -399,15 +399,15 @@ class MemoWindow : Window
         menu.Items.Add(Item("刷新", delegate { Render(); }));
         menu.Items.Add(Item("打开全文", delegate { OpenDoc(); }));
         var hide = new MenuItem { Header = "贴边自动隐藏", IsCheckable = true, IsChecked = autoHide };
-        hide.Click += delegate { autoHide = hide.IsChecked; if (!autoHide) ShowWindow(); SaveState(); };
+        hide.Click += delegate { autoHide = hide.IsChecked; if (!autoHide) ShowWindow(); stateDirty = true; SaveState(); };
         menu.Items.Add(hide);
 
         var pet = new MenuItem { Header = "显示小宠物（代替时间）", IsCheckable = true, IsChecked = showPet };
-        pet.Click += delegate { showPet = pet.IsChecked; SaveState(); };
+        pet.Click += delegate { showPet = pet.IsChecked; stateDirty = true; SaveState(); };
         menu.Items.Add(pet);
 
         var voice = new MenuItem { Header = "语音唤出（说「芝麻开门」）", IsCheckable = true, IsChecked = voiceWake };
-        voice.Click += delegate { voiceWake = voice.IsChecked; if (voiceWake) StartVoice(); else StopVoice(); SaveState(); };
+        voice.Click += delegate { voiceWake = voice.IsChecked; if (voiceWake) StartVoice(); else StopVoice(); stateDirty = true; SaveState(); };
         menu.Items.Add(voice);
         var opacityMenu = new MenuItem { Header = "透明度" };
         double[] levels = new double[] { 1.0, 0.92, 0.8, 0.6 };
@@ -415,7 +415,7 @@ class MemoWindow : Window
         {
             double v = level;
             var mi = new MenuItem { Header = ((int)(v * 100)).ToString() + "%", IsCheckable = true, IsChecked = Math.Abs(opacity - v) < 0.01 };
-            mi.Click += delegate { opacity = v; Opacity = v; SaveState(); };
+            mi.Click += delegate { opacity = v; Opacity = v; stateDirty = true; SaveState(); };
             opacityMenu.Items.Add(mi);
         }
         menu.Items.Add(opacityMenu);
@@ -902,6 +902,7 @@ class MemoWindow : Window
 
     void SaveState()
     {
+        if (!stateDirty) return;
         try
         {
             var sb = new StringBuilder();
@@ -922,6 +923,7 @@ class MemoWindow : Window
               .Append(",\"ShowPet\":").Append(showPet ? "true" : "false")
               .Append("}");
             File.WriteAllText(StatePath, sb.ToString(), Utf8);
+            stateDirty = false;
         }
         catch { }
     }
