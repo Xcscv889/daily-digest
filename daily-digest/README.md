@@ -94,6 +94,18 @@ csc -nologo -target:winexe -optimize+ ^
   -out:DailyMemoWpf.exe MemoWpf.cs
 ```
 
+### 关于仓库里的 exe
+
+`scripts/native/DailyMemoWpf.exe` 是编译产物，直接提交进仓库是为了免去用户自己装编译器。它由同目录的 `MemoWpf.cs` 编译而来，没有任何依赖，也可以自己重新编译后替换。
+
+SHA256（v4.4.0）：
+
+```
+819FE3871F9DA48E574A96245C3EE0ACE9C534D4BDF54839B2E65147C229E63D
+```
+
+不想运行现成二进制的话，按上面的 csc 命令编译，或者直接用 `scripts/memo.ps1`（PowerShell 版，功能相同但内存约 270 MB）。
+
 ## 依赖
 
 - Windows + PowerShell 7 + Python 3.9+
