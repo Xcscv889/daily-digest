@@ -1,0 +1,13 @@
+{
+  "name": "local",
+  "owner": {
+    "name": "xuyan"
+  },
+  "plugins": [
+    {
+      "name": "daily-digest",
+      "source": "./daily-digest",
+      "description": "每日工作日报、时间分析、次日追问和桌面备忘小窗"
+    }
+  ]
+}
