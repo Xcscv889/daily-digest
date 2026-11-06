@@ -164,6 +164,11 @@ class MemoWindow : Window
             SaveState();
         };
         header.MouseRightButtonUp += delegate { menu.IsOpen = true; };
+        card.MouseRightButtonUp += delegate(object s2, MouseButtonEventArgs e2)
+        {
+            menu.IsOpen = true;
+            e2.Handled = true;
+        };
         refreshBtn.Click += delegate { Render(); };
         foldBtn.Click += delegate { SetCollapsed(!collapsed); };
 

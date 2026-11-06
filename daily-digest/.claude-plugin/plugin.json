@@ -1,6 +1,6 @@
 {
   "name": "daily-digest",
-  "version": "4.9.1",
+  "version": "4.9.2",
   "description": "每日工作日报：抽取本地 Claude Code 会话，分析做了什么、时间去哪了、提问质量，生成次日追问与桌面备忘",
   "author": {
     "name": "xuyan"
