@@ -39,6 +39,9 @@ class MemoWindow : Window
     static readonly string LogPath = Path.Combine(Dir, "memo.log");
     static readonly string DonePath = Path.Combine(Dir, "done.md");
     static readonly string TodayPath = Path.Combine(Dir, "today.txt");
+    static readonly string SummaryPath = Path.Combine(Dir, "today-summary.txt");
+    static readonly string SummaryScript = Path.Combine(
+        Path.GetDirectoryName(Path.GetDirectoryName(typeof(MemoWindow).Assembly.Location) ?? ".") ?? ".", "today-summary.ps1");
     static readonly string LiveScript = Path.Combine(
         Path.GetDirectoryName(Path.GetDirectoryName(typeof(MemoWindow).Assembly.Location) ?? ".") ?? ".", "live.py");
 
@@ -212,6 +215,12 @@ class MemoWindow : Window
             try { RegisterHotKey(new WindowInteropHelper(this).Handle, 1, 3, (uint)Key.N); } catch { }
             StartClock();
             RefreshLive();
+            var summaryBoot = new DispatcherTimer { Interval = TimeSpan.FromSeconds(25) };
+            summaryBoot.Tick += delegate { summaryBoot.Stop(); RefreshSummary(); };
+            summaryBoot.Start();
+            var summaryTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(60) };
+            summaryTimer.Tick += delegate { RefreshSummary(); };
+            summaryTimer.Start();
             var liveTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(5) };
             liveTimer.Tick += delegate { RefreshLive(); };
             liveTimer.Start();
@@ -416,6 +425,10 @@ class MemoWindow : Window
         hide.Click += delegate { autoHide = hide.IsChecked; if (!autoHide) ShowWindow(); stateDirty = true; SaveState(); };
         menu.Items.Add(hide);
 
+        var refreshDone = new MenuItem { Header = "刷新今天做了（AI）" };
+        refreshDone.Click += delegate { RefreshSummary(); };
+        menu.Items.Add(refreshDone);
+
         var showDoneItem = new MenuItem { Header = "显示「今天做了」", IsCheckable = true, IsChecked = showDone };
         showDoneItem.Click += delegate { showDone = showDoneItem.IsChecked; stateDirty = true; SaveState(); Render(); };
         menu.Items.Add(showDoneItem);
@@ -577,7 +590,15 @@ class MemoWindow : Window
                 }
             }
 
-            var doneToday = showDone ? ReadDoneToday() : new List<string>();
+            var aiSummary = showDone ? ReadTodaySummary() : "";
+            if (aiSummary.Length > 0)
+            {
+                AddToggleLabel("今天做了 · AI 概括" + (doneCollapsed ? "  ▸" : "  ▾"),
+                    delegate { doneCollapsed = !doneCollapsed; stateDirty = true; SaveState(); Render(); });
+                if (!doneCollapsed) AddMutedLine("「" + aiSummary + "」");
+            }
+
+            var doneToday = (showDone && aiSummary.Length == 0) ? ReadDoneToday() : new List<string>();
             if (doneToday.Count > 0)
             {
                 AddToggleLabel("今天做了 · " + doneToday.Count + " 件" + (doneCollapsed ? "  ▸" : "  ▾"),
@@ -589,7 +610,7 @@ class MemoWindow : Window
                         AddMutedLine("✓ " + doneToday[i]);
                 }
             }
-            else if (showDone)
+            else if (showDone && aiSummary.Length == 0)
             {
                 var recent = ReadTodayList();
                 if (recent.Count > 0)
@@ -833,6 +854,37 @@ class MemoWindow : Window
         }
         catch { }
         return list;
+    }
+
+    string ReadTodaySummary()
+    {
+        try
+        {
+            if (!File.Exists(SummaryPath)) return "";
+            foreach (var raw in File.ReadAllLines(SummaryPath, Utf8))
+            {
+                var line = raw.Trim();
+                if (line.Length == 0 || line.StartsWith("#")) continue;
+                return line;
+            }
+        }
+        catch { }
+        return "";
+    }
+
+    void RefreshSummary()
+    {
+        try
+        {
+            if (!File.Exists(SummaryScript)) return;
+            var psi = new System.Diagnostics.ProcessStartInfo("pwsh",
+                "-NoProfile -WindowStyle Hidden -File \"" + SummaryScript + "\"");
+            psi.CreateNoWindow = true;
+            psi.UseShellExecute = false;
+            psi.WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden;
+            System.Diagnostics.Process.Start(psi);
+        }
+        catch (Exception ex) { Log("summary refresh failed: " + ex.Message); }
     }
 
     void RefreshLive()
