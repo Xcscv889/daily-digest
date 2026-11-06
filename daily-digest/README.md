@@ -83,6 +83,8 @@ daily-digest/                     插件本体
 
 ## 桌面小窗
 
+<img src="docs/memo.png" width="400" alt="桌面小窗">
+
 ### 显示什么
 
 ```
