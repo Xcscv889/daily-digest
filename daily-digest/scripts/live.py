@@ -34,6 +34,13 @@ def main():
         start -= timedelta(days=1)
 
     excluded = set(cfg.get("exclude_projects") or [])
+    import re as _re
+    masks = [(_re.compile(pat), "已排除项目") for pat in (cfg.get("exclude_path_patterns") or [])]
+
+    def mask(text):
+        for pattern, label in masks:
+            text = pattern.sub(label, text)
+        return text
     root = os.path.expanduser(cfg.get("projects_root", "~/.claude/projects"))
 
     recent = []
@@ -68,7 +75,7 @@ def main():
                     continue
                 events += 1
                 if (row.get("type") == "user" and not row.get("isMeta")
-                        and not row.get("isSidechain") and project not in excluded):
+                        and not row.get("isSidechain")):
                     content = (row.get("message") or {}).get("content")
                     texts = []
                     if isinstance(content, str):
@@ -80,8 +87,8 @@ def main():
                         text = text.strip()
                         if len(text) < 6 or text.startswith(("<", "Base directory", "[Request", "[Image", "[粘贴")):
                             continue
-                        recent.append(text)
-                if row.get("type") == "assistant" and project not in excluded:
+                        recent.append(mask(text))
+                if row.get("type") == "assistant":
                     content = (row.get("message") or {}).get("content")
                     if isinstance(content, list):
                         for item in content:
@@ -94,7 +101,7 @@ def main():
                                 continue
                             parts = path.replace("/", "\\").split("\\")
                             label = parts[-1] if len(parts) < 2 else parts[-2] + "/" + parts[-1]
-                            edited[label] += 1
+                            edited[mask(label)] += 1
 
                 if prev is not None and prev[0] == project:
                     gap = (moment - prev[1]).total_seconds() / 60

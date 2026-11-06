@@ -116,7 +116,7 @@ class MemoWindow : Window
     DateTime stampDoc = DateTime.MinValue, stampTasks = DateTime.MinValue;
 
     bool collapsed, hidden, autoHide = true, voiceWake = true, stateDirty;
-    bool todoCollapsed, doneCollapsed;
+    bool todoCollapsed, doneCollapsed, showDone = true;
     System.Speech.Recognition.SpeechRecognitionEngine speech;
     DateTime hideAt = DateTime.MaxValue;
     double opacity = 1.0;
@@ -411,6 +411,10 @@ class MemoWindow : Window
         hide.Click += delegate { autoHide = hide.IsChecked; if (!autoHide) ShowWindow(); stateDirty = true; SaveState(); };
         menu.Items.Add(hide);
 
+        var showDoneItem = new MenuItem { Header = "显示「今天做了」", IsCheckable = true, IsChecked = showDone };
+        showDoneItem.Click += delegate { showDone = showDoneItem.IsChecked; stateDirty = true; SaveState(); Render(); };
+        menu.Items.Add(showDoneItem);
+
         var pet = new MenuItem { Header = "显示小宠物（代替时间）", IsCheckable = true, IsChecked = showPet };
         pet.Click += delegate { showPet = pet.IsChecked; stateDirty = true; SaveState(); };
         menu.Items.Add(pet);
@@ -568,7 +572,7 @@ class MemoWindow : Window
                 }
             }
 
-            var doneToday = ReadDoneToday();
+            var doneToday = showDone ? ReadDoneToday() : new List<string>();
             if (doneToday.Count > 0)
             {
                 AddToggleLabel("今天做了 · " + doneToday.Count + " 件" + (doneCollapsed ? "  ▸" : "  ▾"),
@@ -580,7 +584,7 @@ class MemoWindow : Window
                         AddMutedLine("✓ " + doneToday[i]);
                 }
             }
-            else
+            else if (showDone)
             {
                 var recent = ReadTodayList();
                 if (recent.Count > 0)
@@ -978,6 +982,7 @@ class MemoWindow : Window
             showPet = GetBool(json, "ShowPet", false);
             todoCollapsed = GetBool(json, "TodoCollapsed", false);
             doneCollapsed = GetBool(json, "DoneCollapsed", false);
+            showDone = GetBool(json, "ShowDone", true);
         }
         catch { }
     }
@@ -1045,6 +1050,7 @@ class MemoWindow : Window
               .Append(",\"ShowPet\":").Append(showPet ? "true" : "false")
               .Append(",\"TodoCollapsed\":").Append(todoCollapsed ? "true" : "false")
               .Append(",\"DoneCollapsed\":").Append(doneCollapsed ? "true" : "false")
+              .Append(",\"ShowDone\":").Append(showDone ? "true" : "false")
               .Append("}");
             File.WriteAllText(StatePath, sb.ToString(), Utf8);
             stateDirty = false;
