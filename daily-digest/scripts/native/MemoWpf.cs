@@ -38,7 +38,7 @@ class MemoWindow : Window
     static readonly string StatePath = Path.Combine(Dir, "memo.json");
     static readonly string LogPath = Path.Combine(Dir, "memo.log");
 
-    const int WM_HOTKEY = 0x0312, SNAP = 24, PEEK = 8;
+    const int WM_HOTKEY = 0x0312, SNAP = 24, PEEK = 12;
     static readonly Encoding Utf8 = new UTF8Encoding(false);
 
     [DllImport("user32.dll")] static extern bool RegisterHotKey(IntPtr h, int id, uint mods, uint vk);
@@ -461,7 +461,7 @@ class MemoWindow : Window
     // ---------- autohide ----------
     void AutoHideTick()
     {
-        if (!autoHide || !Docked || dragging || collapsed) return;
+        if (!autoHide || !Docked || dragging) return;
         POINT p;
         if (!GetCursorPos(out p)) return;
         double scale = VisualTreeHelper.GetDpi(this).DpiScaleX;

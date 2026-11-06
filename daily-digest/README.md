@@ -103,10 +103,10 @@ csc -nologo -target:winexe -optimize+ ^
 
 `scripts/native/DailyMemoWpf.exe` 是编译产物，直接提交进仓库是为了免去用户自己装编译器。它由同目录的 `MemoWpf.cs` 编译而来，没有任何依赖，也可以自己重新编译后替换。
 
-SHA256（v4.6.1）：
+SHA256（v4.7.1）：
 
 ```
-B95D61F696ADBF254335296B7755D7E700346D8B0D3A4DEE336C31D21343D435
+28FCAD7E665F48EF97334703EDE957F3804547DED5093746E4E7630DD4ACF54C
 ```
 
 不想运行现成二进制的话，按上面的 csc 命令编译，或者直接用 `scripts/memo.ps1`（PowerShell 版，功能相同但内存约 270 MB）。
