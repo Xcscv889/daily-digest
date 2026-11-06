@@ -590,15 +590,16 @@ class MemoWindow : Window
                 }
             }
 
-            var aiSummary = showDone ? ReadTodaySummary() : "";
-            if (aiSummary.Length > 0)
+            var aiSummary = showDone ? ReadTodaySummary() : new List<string>();
+            if (aiSummary.Count > 0)
             {
-                AddToggleLabel("今天做了 · AI 概括" + (doneCollapsed ? "  ▸" : "  ▾"),
+                AddToggleLabel("今天做了 · " + aiSummary.Count + " 项" + (doneCollapsed ? "  ▸" : "  ▾"),
                     delegate { doneCollapsed = !doneCollapsed; stateDirty = true; SaveState(); Render(); });
-                if (!doneCollapsed) AddMutedLine("「" + aiSummary + "」");
+                if (!doneCollapsed)
+                    foreach (var line in aiSummary) AddMutedLine("· " + line);
             }
 
-            var doneToday = (showDone && aiSummary.Length == 0) ? ReadDoneToday() : new List<string>();
+            var doneToday = (showDone && aiSummary.Count == 0) ? ReadDoneToday() : new List<string>();
             if (doneToday.Count > 0)
             {
                 AddToggleLabel("今天做了 · " + doneToday.Count + " 件" + (doneCollapsed ? "  ▸" : "  ▾"),
@@ -610,7 +611,7 @@ class MemoWindow : Window
                         AddMutedLine("✓ " + doneToday[i]);
                 }
             }
-            else if (showDone && aiSummary.Length == 0)
+            else if (showDone && aiSummary.Count == 0)
             {
                 var recent = ReadTodayList();
                 if (recent.Count > 0)
@@ -856,20 +857,22 @@ class MemoWindow : Window
         return list;
     }
 
-    string ReadTodaySummary()
+    List<string> ReadTodaySummary()
     {
+        var list = new List<string>();
         try
         {
-            if (!File.Exists(SummaryPath)) return "";
+            if (!File.Exists(SummaryPath)) return list;
             foreach (var raw in File.ReadAllLines(SummaryPath, Utf8))
             {
                 var line = raw.Trim();
-                if (line.Length == 0 || line.StartsWith("#")) continue;
-                return line;
+                if (line.Length < 2 || line.StartsWith("#")) continue;
+                list.Add(line);
+                if (list.Count >= 4) break;
             }
         }
         catch { }
-        return "";
+        return list;
     }
 
     void RefreshSummary()

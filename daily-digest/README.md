@@ -87,7 +87,7 @@ claude plugin install daily-digest@local
 - 标题栏：今天的日期、居中的七段数码管时钟（可切换成 ASCII 小宠物）、实时天气（Open-Meteo）
 - 待办：回车新增、双击勾选、悬停 × 删除
 - 内容顺序：今天要做的（可折叠）→ 今天做了（可折叠）→ 今天先问自己 → 昨天一行摘要
-- 「今天做了」由 `today-summary.ps1` 调一次 `claude -p`，把今天的会话压成一句话（每小时刷新一次，右键可手动刷新）。消耗按一次短对话计算；没有可用内容时不调用。
+- 「今天做了」由 `today-summary.ps1` 调一次 `claude -p`，把今天的会话压成 3–4 条要点（每小时刷新一次，右键可手动刷新）。消耗按一次短对话计算；没有可用内容时不调用。
 
 没开 AI 概括时，退回到 `live.py` 的事实列表（今天改过哪些文件、问过什么），排除项目的名字会打码。
 
@@ -106,10 +106,10 @@ csc -nologo -target:winexe -optimize+ ^
 
 `scripts/native/DailyMemoWpf.exe` 是编译产物，直接提交进仓库是为了免去用户自己装编译器。它由同目录的 `MemoWpf.cs` 编译而来，没有任何依赖，也可以自己重新编译后替换。
 
-SHA256（v4.10.0）：
+SHA256（v4.10.1）：
 
 ```
-63B698FBEA268D99B66D6048B446A9F6BCDEB7BF2A2335D557526AEB97898EDE
+77D97F4D54672A4EA62F3B6FB1BB9601F004D46F50E6A474D4DB2DFF67B04308
 ```
 
 不想运行现成二进制的话，按上面的 csc 命令编译，或者直接用 `scripts/memo.ps1`（PowerShell 版，功能相同但内存约 270 MB）。

@@ -19,12 +19,13 @@ $json = Join-Path $root ("work\day-{0}.json" -f $today)
 if (-not (Test-Path $json)) { Log "没有今天的 day.json"; exit 0 }
 
 $prompt = @"
-下面是用户今天（$today）在 Claude Code 里的工作摘要 JSON。请用一句中文概括他今天主要在做什么，不超过 30 字，只输出这句话本身，不要引号、不要标点开头、不要解释。
+下面是用户今天（$today）在 Claude Code 里的工作摘要 JSON。请概括他今天做的**几件事**。
 
 要求：
-- 说清"在做什么模块/功能"，不要罗列文件名
-- 如果内容跨多个主题，挑最主要的一件
-- 信息不足就输出"今天的工作比较零散"
+- 3 到 4 条，每条一行，不超过 16 个字
+- 每条说一个模块或一件事（例如"渠道后台链接管理收口""日报插件小窗迭代"）
+- 不要编号、不要符号、不要文件名、不要解释
+- 只输出这些行，别的什么都不要
 
 JSON：
 "@
@@ -43,8 +44,12 @@ print(json.dumps(parts,ensure_ascii=False)[:6000])
 if (-not $trimmed) { Log "没有可提炼的内容"; exit 0 }
 
 $answer = & claude -p ($prompt + $trimmed) 2>&1 | Out-String
-$answer = ($answer -split "`n" | Where-Object { $_.Trim() } | Select-Object -Last 1).Trim()
-if (-not $answer -or $answer.Length -gt 60) { Log ("提炼失败: " + $answer); exit 0 }
+$lines = @($answer -split "`n" |
+    ForEach-Object { ($_ -replace '^\s*[-•\d.、]+\s*', '').Trim() } |
+    Where-Object { $_.Length -ge 2 -and $_.Length -le 40 } |
+    Select-Object -First 4)
+if ($lines.Count -eq 0) { Log ("提炼失败: " + $answer); exit 0 }
 
-Set-Content -Path $out -Value ("# {0} {1}`n{2}" -f $today, (Get-Date -Format "HH:mm"), $answer) -Encoding utf8
-Log ("ok: " + $answer)
+$body = ($lines -join "`n")
+Set-Content -Path $out -Value ("# {0} {1}`n{2}" -f $today, (Get-Date -Format "HH:mm"), $body) -Encoding utf8
+Log ("ok: " + ($lines -join " / "))
