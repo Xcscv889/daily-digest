@@ -37,6 +37,7 @@ class MemoWindow : Window
     static readonly string TasksPath = Path.Combine(Dir, "tasks.md");
     static readonly string StatePath = Path.Combine(Dir, "memo.json");
     static readonly string LogPath = Path.Combine(Dir, "memo.log");
+    static readonly string DonePath = Path.Combine(Dir, "done.md");
 
     const int WM_HOTKEY = 0x0312, SNAP = 24, PEEK = 12;
     static readonly Encoding Utf8 = new UTF8Encoding(false);
@@ -112,6 +113,7 @@ class MemoWindow : Window
     DateTime stampDoc = DateTime.MinValue, stampTasks = DateTime.MinValue;
 
     bool collapsed, hidden, autoHide = true, voiceWake = true, stateDirty;
+    bool todoCollapsed, doneCollapsed;
     System.Speech.Recognition.SpeechRecognitionEngine speech;
     DateTime hideAt = DateTime.MaxValue;
     double opacity = 1.0;
@@ -544,13 +546,31 @@ class MemoWindow : Window
             foreach (var t in tasks) if (!t.Done) openCount++;
             if (tasks.Count > 0)
             {
-                AddLabel("今天要做的 · 未完成 " + openCount + "（双击勾掉）");
-                int so = 0, sd = 0;
-                foreach (var t in tasks)
+                AddToggleLabel("今天要做的 · 未完成 " + openCount + (todoCollapsed ? "  ▸" : "  ▾"),
+                    delegate { todoCollapsed = !todoCollapsed; stateDirty = true; SaveState(); Render(); });
+                if (!todoCollapsed)
                 {
-                    if (t.Done) { if (sd >= 2) continue; sd++; }
-                    else { if (so >= 6) continue; so++; }
-                    AddTaskRow(t);
+                    int so = 0;
+                    foreach (var t in tasks)
+                    {
+                        if (t.Done) continue;
+                        if (so >= 6) break;
+                        so++;
+                        AddTaskRow(t);
+                    }
+                }
+            }
+
+            var doneToday = ReadDoneToday();
+            if (doneToday.Count > 0)
+            {
+                AddToggleLabel("今天做了 · " + doneToday.Count + " 件" + (doneCollapsed ? "  ▸" : "  ▾"),
+                    delegate { doneCollapsed = !doneCollapsed; stateDirty = true; SaveState(); Render(); });
+                if (!doneCollapsed)
+                {
+                    int shown = 0;
+                    for (int i = doneToday.Count - 1; i >= 0 && shown < 5; i--, shown++)
+                        AddMutedLine("✓ " + doneToday[i]);
                 }
             }
 
@@ -653,6 +673,21 @@ class MemoWindow : Window
         bodyPanel.Children.Add(grid);
     }
 
+    void AddToggleLabel(string text, MouseButtonEventHandler onClick)
+    {
+        var tb = new TextBlock
+        {
+            Text = text,
+            Foreground = Muted,
+            FontSize = 10.5,
+            Margin = new Thickness(0, 12, 0, 5),
+            Cursor = Cursors.Hand,
+            Background = Brushes.Transparent
+        };
+        tb.MouseLeftButtonUp += onClick;
+        bodyPanel.Children.Add(tb);
+    }
+
     void AddLabel(string text)
     {
         bodyPanel.Children.Add(new TextBlock
@@ -753,6 +788,38 @@ class MemoWindow : Window
     // ---------- tasks ----------
     class TaskItem { public bool Done; public string Text; public int Line; }
 
+    List<string> ReadDoneToday()
+    {
+        var list = new List<string>();
+        if (!File.Exists(DonePath)) return list;
+        string today = DateTime.Now.ToString("yyyy-MM-dd");
+        foreach (var raw in File.ReadAllLines(DonePath, Utf8))
+        {
+            var line = raw.Trim();
+            if (line.StartsWith("- ") && line.Length > 12 && line.Substring(2).StartsWith(today))
+            {
+                var text = line.Substring(13).Trim();
+                if (text.Length > 0) list.Add(text);
+            }
+        }
+        return list;
+    }
+
+    void RecordDone(string text, bool done)
+    {
+        try
+        {
+            var lines = new List<string>();
+            if (File.Exists(DonePath)) lines.AddRange(File.ReadAllLines(DonePath, Utf8));
+            if (done)
+                lines.Add("- " + DateTime.Now.ToString("yyyy-MM-dd HH:mm") + " " + text);
+            else
+                lines.RemoveAll(delegate(string l) { return l.TrimEnd().EndsWith(" " + text); });
+            File.WriteAllLines(DonePath, lines.ToArray(), Utf8);
+        }
+        catch (Exception ex) { Log("done record failed: " + ex.Message); }
+    }
+
     List<TaskItem> ReadTasks()
     {
         var list = new List<TaskItem>();
@@ -772,8 +839,9 @@ class MemoWindow : Window
         {
             var lines = new List<string>(File.ReadAllLines(TasksPath, Utf8));
             if (line < 0 || line >= lines.Count) return;
-            if (lines[line].StartsWith("- [ ] ")) lines[line] = "- [x] " + lines[line].Substring(6);
-            else if (lines[line].StartsWith("- [x] ")) lines[line] = "- [ ] " + lines[line].Substring(6);
+            string title = lines[line].Substring(6).Trim();
+            if (lines[line].StartsWith("- [ ] ")) { lines[line] = "- [x] " + title; RecordDone(title, true); }
+            else if (lines[line].StartsWith("- [x] ")) { lines[line] = "- [ ] " + title; RecordDone(title, false); }
             else return;
             File.WriteAllLines(TasksPath, lines.ToArray(), Utf8);
             Log("task toggled line " + line);
@@ -856,6 +924,8 @@ class MemoWindow : Window
             opacity = GetDouble(json, "Opacity", 1.0);
             voiceWake = GetBool(json, "VoiceWake", true);
             showPet = GetBool(json, "ShowPet", false);
+            todoCollapsed = GetBool(json, "TodoCollapsed", false);
+            doneCollapsed = GetBool(json, "DoneCollapsed", false);
         }
         catch { }
     }
@@ -921,6 +991,8 @@ class MemoWindow : Window
               .Append(",\"AutoHide\":").Append(autoHide ? "true" : "false")
               .Append(",\"VoiceWake\":").Append(voiceWake ? "true" : "false")
               .Append(",\"ShowPet\":").Append(showPet ? "true" : "false")
+              .Append(",\"TodoCollapsed\":").Append(todoCollapsed ? "true" : "false")
+              .Append(",\"DoneCollapsed\":").Append(doneCollapsed ? "true" : "false")
               .Append("}");
             File.WriteAllText(StatePath, sb.ToString(), Utf8);
             stateDirty = false;
