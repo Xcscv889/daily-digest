@@ -122,6 +122,18 @@ B95D61F696ADBF254335296B7755D7E700346D8B0D3A4DEE336C31D21343D435
 - 日报默认只落本地；配置云盘驱动后，日报正文才会离开本机
 - `exclude_projects` 里的项目可配置成完全不采集内容
 
+## 计划任务
+
+装好后会有三个任务：
+
+| 任务 | 触发 | 作用 |
+|---|---|---|
+| `ClaudeDailyDigest` | 每天 08:00，错过后补跑 | 生成前一天的日报 |
+| `ClaudeWeeklyDigest` | 每周日 20:00 | 汇总周报 |
+| `ClaudeMemoWatchdog` | 每 10 分钟 | 小窗没在跑就拉起来（休眠/崩溃后自动恢复） |
+
+注意：任务的"程序"必须写 **pwsh.exe 的完整路径**，不能只写 `pwsh.exe` —— 计划任务解析不到 Windows Store 的别名，会以 `0x80070002` 失败。
+
 ## 排错
 
 - 日志：`~/.daily-digest/memo.log`、`run.log`
