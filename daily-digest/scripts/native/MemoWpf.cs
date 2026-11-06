@@ -38,6 +38,9 @@ class MemoWindow : Window
     static readonly string StatePath = Path.Combine(Dir, "memo.json");
     static readonly string LogPath = Path.Combine(Dir, "memo.log");
     static readonly string DonePath = Path.Combine(Dir, "done.md");
+    static readonly string TodayPath = Path.Combine(Dir, "today.txt");
+    static readonly string LiveScript = Path.Combine(
+        Path.GetDirectoryName(Path.GetDirectoryName(typeof(MemoWindow).Assembly.Location) ?? ".") ?? ".", "live.py");
 
     const int WM_HOTKEY = 0x0312, SNAP = 24, PEEK = 12;
     static readonly Encoding Utf8 = new UTF8Encoding(false);
@@ -203,6 +206,10 @@ class MemoWindow : Window
             source.AddHook(WndProc);
             try { RegisterHotKey(new WindowInteropHelper(this).Handle, 1, 3, (uint)Key.N); } catch { }
             StartClock();
+            RefreshLive();
+            var liveTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(5) };
+            liveTimer.Tick += delegate { RefreshLive(); };
+            liveTimer.Start();
             LoadWeather();
             if (voiceWake) StartVoice();
             var weatherTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(30) };
@@ -573,6 +580,20 @@ class MemoWindow : Window
                         AddMutedLine("✓ " + doneToday[i]);
                 }
             }
+            else
+            {
+                var recent = ReadTodayList();
+                if (recent.Count > 0)
+                {
+                    AddToggleLabel("今天做了 · 最近 " + recent.Count + " 项" + (doneCollapsed ? "  ▸" : "  ▾"),
+                        delegate { doneCollapsed = !doneCollapsed; stateDirty = true; SaveState(); Render(); });
+                    if (!doneCollapsed)
+                    {
+                        for (int i = recent.Count - 1; i >= 0 && i >= recent.Count - 5; i--)
+                            AddMutedLine("· " + recent[i]);
+                    }
+                }
+            }
 
             // 2) 解析日报：标题 / 摘要 / 今天先问自己
             string title = "";
@@ -787,6 +808,37 @@ class MemoWindow : Window
 
     // ---------- tasks ----------
     class TaskItem { public bool Done; public string Text; public int Line; }
+
+    List<string> ReadTodayList()
+    {
+        var list = new List<string>();
+        try
+        {
+            if (!File.Exists(TodayPath)) return list;
+            foreach (var raw in File.ReadAllLines(TodayPath, Utf8))
+            {
+                var line = raw.Trim();
+                if (line.Length < 4 || line.StartsWith("#")) continue;
+                list.Add(line);
+            }
+        }
+        catch { }
+        return list;
+    }
+
+    void RefreshLive()
+    {
+        try
+        {
+            if (!File.Exists(LiveScript)) return;
+            var psi = new System.Diagnostics.ProcessStartInfo("python", "-X utf8 \"" + LiveScript + "\"");
+            psi.CreateNoWindow = true;
+            psi.UseShellExecute = false;
+            psi.WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden;
+            System.Diagnostics.Process.Start(psi);
+        }
+        catch (Exception ex) { Log("live refresh failed: " + ex.Message); }
+    }
 
     List<string> ReadDoneToday()
     {

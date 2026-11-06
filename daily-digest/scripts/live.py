@@ -37,6 +37,7 @@ def main():
     root = os.path.expanduser(cfg.get("projects_root", "~/.claude/projects"))
 
     recent = []
+    edited = defaultdict(int)
     minutes = defaultdict(float)
     counts = defaultdict(int)
     excluded_minutes = 0.0
@@ -80,6 +81,21 @@ def main():
                         if len(text) < 6 or text.startswith(("<", "Base directory", "[Request", "[Image", "[粘贴")):
                             continue
                         recent.append(text)
+                if row.get("type") == "assistant" and project not in excluded:
+                    content = (row.get("message") or {}).get("content")
+                    if isinstance(content, list):
+                        for item in content:
+                            if not isinstance(item, dict) or item.get("type") != "tool_use":
+                                continue
+                            if item.get("name") not in ("Edit", "Write", "MultiEdit", "NotebookEdit"):
+                                continue
+                            path = (item.get("input") or {}).get("file_path") or ""
+                            if not path or ".daily-digest" in path.lower() or "\temp\\" in path.lower():
+                                continue
+                            parts = path.replace("/", "\\").split("\\")
+                            label = parts[-1] if len(parts) < 2 else parts[-2] + "/" + parts[-1]
+                            edited[label] += 1
+
                 if prev is not None and prev[0] == project:
                     gap = (moment - prev[1]).total_seconds() / 60
                     if 0 < gap <= 15:
@@ -109,11 +125,24 @@ def main():
         "excluded_minutes": round(excluded_minutes),
         "events": events,
         "projects": projects[:4],
-        "recent": [t[:120] for t in recent[-3:]],
+        "recent": [t[:120] for t in recent[-8:]],
+        "edited": [{ "name": k, "count": v } for k, v in sorted(edited.items(), key=lambda kv: -kv[1])[:6]],
     }
     with io.open(OUT, "w", encoding="utf-8") as fh:
         json.dump(payload, fh, ensure_ascii=False, indent=1)
 
+    # 给桌面小窗读的纯文本：今天最近做过的几件事
+    txt = os.path.join(ROOT, "today.txt")
+    lines = ["# " + payload["date"] + " " + payload["updated"]]
+    for f in payload["edited"][:4]:
+        lines.append("改 " + f["name"])
+    tail = 2 if len(lines) > 1 else 4
+    for item in payload["recent"][-tail:]:
+        item = " ".join(item.split())
+        if len(item) > 46:
+            item = item[:46] + "…"
+        lines.append("问 " + item)
+    io.open(txt, "w", encoding="utf-8").write(chr(10).join(lines) + chr(10))
 
 if __name__ == "__main__":
     sys.stdout.reconfigure(encoding="utf-8")
