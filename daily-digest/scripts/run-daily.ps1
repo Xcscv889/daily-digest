@@ -1,40 +1,100 @@
-# Scheduled entry: collect -> analyze -> archive -> cleanup
-param([string]$Date = (Get-Date).AddDays(-1).ToString("yyyy-MM-dd"))
+﻿# Scheduled entry: catch up every missing day -> collect -> analyze -> archive -> cleanup
+param([string]$Date = "")
 
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 $OutputEncoding = [Text.Encoding]::UTF8
 $root = Join-Path $env:USERPROFILE ".daily-digest"
 $log = Join-Path $root "run.log"
+$markFile = Join-Path $root "state\last-run.json"
+$maxBackfill = 14   # 最多补两周，防止首次运行或长期关机后狂跑
 
 function Log($m) {
     try { Add-Content -Path $log -Value ("{0} {1}" -f (Get-Date -Format "s"), $m) -Encoding utf8 } catch { }
 }
 
 if ((Test-Path $log) -and ((Get-Item $log).Length -gt 2MB)) { Move-Item $log "$log.old" -Force }
-Log "----- run $Date -----"
 
-try {
-    $collectOut = & python (Join-Path $PSScriptRoot "collect.py") --date $Date 2>&1
-    Log ($collectOut -join " | ")
-} catch {
-    Log ("collect failed: " + $_.Exception.Message)
-    exit 1
+# ---- 决定要跑哪几天 ----
+$yesterday = (Get-Date).AddDays(-1).Date
+$days = @()
+if ($Date) {
+    $days = @([datetime]::ParseExact($Date, "yyyy-MM-dd", $null).Date)
+    Log "----- run $Date (explicit) -----"
+} else {
+    $last = $null
+    try {
+        if (Test-Path $markFile) {
+            $j = Get-Content $markFile -Raw | ConvertFrom-Json
+            if ($j.last_run_date) { $last = [datetime]::ParseExact($j.last_run_date, "yyyy-MM-dd", $null).Date }
+        }
+    } catch { }
+    if (-not $last) {
+        $last = $yesterday.AddDays(-1)   # 没有标记时只跑昨天，不追溯历史
+    }
+    $from = $last.AddDays(1)
+    if ($from -lt (Get-Date).AddDays(-$maxBackfill).Date) {
+        Log ("backfill capped: {0} -> {1}" -f $from.ToString("yyyy-MM-dd"), (Get-Date).AddDays(-$maxBackfill).Date.ToString("yyyy-MM-dd"))
+        $from = (Get-Date).AddDays(-$maxBackfill).Date
+    }
+    $d = $from
+    while ($d -le $yesterday) { $days += $d; $d = $d.AddDays(1) }
+    if ($days.Count -gt 0) {
+        Log ("----- run catch-up {0} .. {1} ({2} day(s)) -----" -f $from.ToString("yyyy-MM-dd"), $yesterday.ToString("yyyy-MM-dd"), $days.Count)
+    }
 }
 
-$prompt = "/daily-digest $Date"
-$output = & claude -p $prompt --permission-mode acceptEdits 2>&1
-Log ("claude exit $LASTEXITCODE; " + (($output | Select-Object -Last 3) -join " | "))
+if ($days.Count -eq 0) { Log "nothing to do"; exit 0 }
 
 $cfg = Get-Content (Join-Path $root "config.json") -Raw | ConvertFrom-Json
-$report = Join-Path $root "days\$Date.md"
+$todo = @()
 
-if (Test-Path $report) {
+foreach ($day in $days) {
+    $ds = $day.ToString("yyyy-MM-dd")
+    $report = Join-Path $root "days\$ds.md"
+    $json = Join-Path $root ("work\day-{0}.json" -f $ds)
+
+    try {
+        $collectOut = & python (Join-Path $PSScriptRoot "collect.py") --date $ds 2>&1
+        Log ("[" + $ds + "] " + ($collectOut -join " | "))
+    } catch {
+        Log ("[" + $ds + "] collect failed: " + $_.Exception.Message)
+        continue
+    }
+
+    # 0 会话的天不调 claude：省一次调用，也不生成空洞的日报
+    $sessions = -1
+    try {
+        if (Test-Path $json) {
+            $j = Get-Content $json -Raw | ConvertFrom-Json
+            $sessions = @($j.sessions).Count
+        }
+    } catch { }
+    if ($sessions -eq 0 -and -not (Test-Path $report)) {
+        Log ("[" + $ds + "] no sessions, skipped")
+        $todo += $ds
+        continue
+    }
+    if (Test-Path $report) {
+        Log ("[" + $ds + "] report exists, skipped")
+        $todo += $ds
+        continue
+    }
+
+    $output = & claude -p "/daily-digest $ds" --permission-mode acceptEdits 2>&1
+    Log ("[" + $ds + "] claude exit $LASTEXITCODE; " + (($output | Select-Object -Last 3) -join " | "))
+    $todo += $ds
+}
+
+# ---- 归档（每份新生成的日报各传一次）----
+foreach ($ds in $todo) {
+    $report = Join-Path $root "days\$ds.md"
+    if (-not (Test-Path $report)) { continue }
     try {
         switch ($cfg.archive.driver) {
             "local" {
                 New-Item -ItemType Directory -Force -Path $cfg.archive.local_path | Out-Null
                 Copy-Item $report $cfg.archive.local_path -Force
-                Log "archived -> $($cfg.archive.local_path)"
+                Log ("[" + $ds + "] archived -> " + $cfg.archive.local_path)
             }
             "baidu" {
                 $bdpan = Join-Path $env:USERPROFILE ".local/bin/bdpan.exe"
@@ -42,15 +102,16 @@ if (Test-Path $report) {
                 $remote = "ClaudeDigest/" + [IO.Path]::GetFileName($report)
                 $sid = "{0}-{1}" -f [DateTimeOffset]::Now.ToUnixTimeSeconds(), (Get-Random -Maximum 999999)
                 $out = & $bdpan upload $report $remote --agentname "claude-code" --session-input "daily digest archive" --session-id $sid --overwrite 2>&1
-                Log ("baidu upload exit=" + $LASTEXITCODE + " " + ($out -join " | "))
+                Log ("[" + $ds + "] baidu upload exit=" + $LASTEXITCODE + " " + ($out -join " | "))
             }
-            default { Log ("unknown archive driver: " + $cfg.archive.driver) }
+            default { Log ("[" + $ds + "] unknown archive driver: " + $cfg.archive.driver) }
         }
     } catch {
-        Log ("archive failed: " + $_.Exception.Message)
+        Log ("[" + $ds + "] archive failed: " + $_.Exception.Message)
     }
 }
 
+# ---- 清理 ----
 try {
     Get-ChildItem (Join-Path $root "days") -Filter *.md |
         Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-[int]$cfg.keep_local_days) } |
@@ -61,4 +122,13 @@ try {
     Log "cleanup done"
 } catch {
     Log ("cleanup failed: " + $_.Exception.Message)
+}
+
+# ---- 记标记：跑到哪天就不会再回头 ----
+if (-not $Date) {
+    try {
+        New-Item -ItemType Directory -Force -Path (Split-Path $markFile) | Out-Null
+        @{ last_run_date = $yesterday.ToString("yyyy-MM-dd"); updated = (Get-Date -Format "s") } |
+            ConvertTo-Json | Set-Content $markFile -Encoding utf8
+    } catch { Log ("mark failed: " + $_.Exception.Message) }
 }

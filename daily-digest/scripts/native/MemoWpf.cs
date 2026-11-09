@@ -591,6 +591,8 @@ class MemoWindow : Window
             }
 
             var aiSummary = showDone ? ReadTodaySummary() : new List<string>();
+            bool summaryStale = showDone && aiSummary.Count == 0
+                && (IsStale(SummaryPath) || IsStale(TodayPath));
             if (aiSummary.Count > 0)
             {
                 AddToggleLabel("今天做了 · " + aiSummary.Count + " 项" + (doneCollapsed ? "  ▸" : "  ▾"),
@@ -654,12 +656,22 @@ class MemoWindow : Window
                 }
             }
 
-            // 4) 昨天一行摘要
+            // 4) 昨天一行摘要（按 current.md 标题里的日期算，不写死「昨天」）
             if (summary.Length > 0)
             {
-                AddLabel(string.IsNullOrEmpty(title) ? "昨天" : "昨天 · " + title);
+                DateTime day;
+                int ago = ParseTitleDate(title, out day) ? (DateTime.Today - day.Date).Days : -1;
+                string head;
+                if (ago <= 1) head = "昨天 · " + title;
+                else if (ago > 1) head = "上次日报 · " + title + "（" + ago + " 天前）";
+                else head = string.IsNullOrEmpty(title) ? "昨天" : "昨天 · " + title;
+                AddLabel(head);
                 AddMutedLine(summary);
             }
+
+            // 4b) 今天的记录还没有
+            if (summaryStale)
+                AddMutedLine("今天还没有记录");
 
             // 5) 没有待办也没日报时给个提示
             if (bodyPanel.Children.Count == 0)
@@ -840,12 +852,59 @@ class MemoWindow : Window
     // ---------- tasks ----------
     class TaskItem { public bool Done; public string Text; public int Line; }
 
+    // current.md 标题形如「11月6日 周五」，只到月和日，年份按「不能是未来」推断
+    static bool ParseTitleDate(string title, out DateTime day)
+    {
+        day = DateTime.MinValue;
+        if (string.IsNullOrEmpty(title)) return false;
+        var m = System.Text.RegularExpressions.Regex.Match(title, @"(\d{1,2})\s*月\s*(\d{1,2})\s*日");
+        if (!m.Success) return false;
+        int mo = int.Parse(m.Groups[1].Value), da = int.Parse(m.Groups[2].Value);
+        if (mo < 1 || mo > 12 || da < 1 || da > 31) return false;
+        try
+        {
+            var d = new DateTime(DateTime.Today.Year, mo, da);
+            if (d > DateTime.Today.AddDays(1)) d = d.AddYears(-1);
+            day = d;
+            return true;
+        }
+        catch { return false; }
+    }
+
+    // 文件首行带 "# YYYY-MM-DD HH:mm"，日期不是今天就当没数据
+    static string HeaderDate(string path)
+    {
+        try
+        {
+            if (!File.Exists(path)) return "";
+            using (var sr = new StreamReader(path, Utf8))
+            {
+                for (int i = 0; i < 3; i++)
+                {
+                    var line = sr.ReadLine();
+                    if (line == null) break;
+                    var m = System.Text.RegularExpressions.Regex.Match(line.Trim(), @"20\d{2}-\d{2}-\d{2}");
+                    if (m.Success) return m.Value;
+                }
+            }
+        }
+        catch { }
+        return "";
+    }
+
+    static bool IsStale(string path)
+    {
+        string d = HeaderDate(path);
+        return d.Length > 0 && d != DateTime.Now.ToString("yyyy-MM-dd");
+    }
+
     List<string> ReadTodayList()
     {
         var list = new List<string>();
         try
         {
             if (!File.Exists(TodayPath)) return list;
+            if (IsStale(TodayPath)) return list;
             foreach (var raw in File.ReadAllLines(TodayPath, Utf8))
             {
                 var line = raw.Trim();
@@ -863,6 +922,7 @@ class MemoWindow : Window
         try
         {
             if (!File.Exists(SummaryPath)) return list;
+            if (IsStale(SummaryPath)) return list;
             foreach (var raw in File.ReadAllLines(SummaryPath, Utf8))
             {
                 var line = raw.Trim();

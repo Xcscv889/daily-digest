@@ -1,4 +1,4 @@
-# 用一次 claude 调用，把今天的会话压成一句话，供小窗显示
+﻿# 用一次 claude 调用，把今天的会话压成一句话，供小窗显示
 $ErrorActionPreference = "SilentlyContinue"
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 
@@ -43,7 +43,8 @@ print(json.dumps(parts,ensure_ascii=False)[:6000])
 
 if (-not $trimmed) { Log "没有可提炼的内容"; exit 0 }
 
-$answer = & claude -p ($prompt + $trimmed) 2>&1 | Out-String
+# 走 opus：settings.json 把 sonnet 映射成 deepseek-v4.1-flash[1m]，代理偶尔不认这个模型名
+$answer = & claude -p ($prompt + $trimmed) --model opus 2>&1 | Out-String
 $lines = @($answer -split "`n" |
     ForEach-Object { ($_ -replace '^\s*[-•\d.、]+\s*', '').Trim() } |
     Where-Object { $_.Length -ge 2 -and $_.Length -le 40 } |

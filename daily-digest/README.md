@@ -142,10 +142,10 @@ csc -nologo -target:winexe -optimize+ ^
 
 `scripts/native/DailyMemoWpf.exe` 是编译产物，提交进仓库是为了免去用户自己装编译器。它由同目录的 `MemoWpf.cs` 编译而来，没有任何依赖，也可以自己重新编译后替换。
 
-SHA256（v4.10.1）：
+SHA256（v4.11.0）：
 
 ```
-77D97F4D54672A4EA62F3B6FB1BB9601F004D46F50E6A474D4DB2DFF67B04308
+8EBF2FFA7E09668295FF4B4956882BB4B4375386F189D6908DC2475445C0599A
 ```
 
 不想运行现成二进制的话，按上面的命令编译，或改用 `scripts/memo.ps1`（PowerShell 版，功能略旧但代码更好改）。
@@ -158,7 +158,8 @@ SHA256（v4.10.1）：
 | `live.py` | 今日活跃统计，写 `live.json` / `today.txt` |
 | `today-summary.ps1` | 调一次 `claude -p`，把今天压成 3–4 条要点 |
 | `session-start.ps1` | SessionStart hook 入口，输出 UTF-8 JSON |
-| `run-daily.ps1` | 每日任务：抽取 → 分析 → 归档 → 清理 |
+| `run-daily.ps1` | 每日任务：补跑缺的天 → 抽取 → 分析 → 归档 → 清理 |
+| `run-daily.vbs` / `run-weekly.vbs` | 无控制台启动器，计划任务调这两个 |
 | `run-weekly.ps1` | 周报任务 |
 | `ensure-memo.ps1` | 小窗守护：不在就拉起 |
 
@@ -166,11 +167,16 @@ SHA256（v4.10.1）：
 
 | 任务 | 触发 | 作用 |
 |---|---|---|
-| `ClaudeDailyDigest` | 每天 08:00，错过后补跑 | 生成前一天的日报 |
+| `ClaudeDailyDigest` | 每天 08:00，错过后补跑 | 生成前一天的日报，并把漏掉的天补上 |
 | `ClaudeWeeklyDigest` | 每周日 20:00 | 汇总周报 |
 | `ClaudeMemoWatchdog` | 每 10 分钟 | 小窗没在跑就拉起来 |
 
-注意：任务的"程序"必须写 **pwsh.exe 的完整路径**，不能只写 `pwsh.exe` —— 计划任务解析不到 Microsoft Store 的别名，会以 `0x80070002` 失败。
+**启动方式**：日报和周报任务都通过 `wscript.exe run-daily.vbs` 拉起来，不要在任务里直接调 `pwsh.exe`。两个原因：
+
+1. 任务里写 `pwsh.exe` 别名会 `0x80070002` 失败（Store 版 PowerShell 的别名计划任务解析不到），以前踩过一次
+2. 直接调 `pwsh.exe` 会带一个控制台窗口，误关掉就是 `0xC000013A`（2026-11-09 两次日报中断就是这个原因）；vbs 用 `WScript.Shell.Run` 的窗口样式 0 启动，没有窗口可关
+
+**补跑**：`run-daily.ps1` 记 `state/last-run.json` 里的 `last_run_date`，每次从那天之后一路补到昨天，最多补 14 天。0 会话的天只写日志、不调模型；已有 `days/<date>.md` 的天跳过。要重跑某天用 `-Date yyyy-MM-dd`（此时不更新标记）。
 
 ## 成本
 
