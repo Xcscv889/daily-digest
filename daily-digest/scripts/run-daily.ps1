@@ -47,17 +47,21 @@ if ($days.Count -eq 0) { Log "nothing to do"; exit 0 }
 
 $cfg = Get-Content (Join-Path $root "config.json") -Raw | ConvertFrom-Json
 $todo = @()
+$markTo = $null      # 只有连续跑通的日子才推进 last-run 标记
+$failed = $false
 
 foreach ($day in $days) {
     $ds = $day.ToString("yyyy-MM-dd")
     $report = Join-Path $root "days\$ds.md"
     $json = Join-Path $root ("work\day-{0}.json" -f $ds)
+    $settled = $false
 
     try {
         $collectOut = & python (Join-Path $PSScriptRoot "collect.py") --date $ds 2>&1
         Log ("[" + $ds + "] " + ($collectOut -join " | "))
     } catch {
         Log ("[" + $ds + "] collect failed: " + $_.Exception.Message)
+        $failed = $true
         continue
     }
 
@@ -72,17 +76,30 @@ foreach ($day in $days) {
     if ($sessions -eq 0 -and -not (Test-Path $report)) {
         Log ("[" + $ds + "] no sessions, skipped")
         $todo += $ds
-        continue
+        $settled = $true
     }
-    if (Test-Path $report) {
+    elseif (Test-Path $report) {
         Log ("[" + $ds + "] report exists, skipped")
         $todo += $ds
-        continue
+        $settled = $true
+    }
+    else {
+        # 无头会话的工作目录不是 ~/.daily-digest，必须显式放行数据目录和插件目录，
+        # 否则读 day.json 会被「allowed working directories」拦掉，而且退出码仍是 0
+        $output = & claude -p "/daily-digest $ds" --permission-mode acceptEdits `
+            --add-dir $root --add-dir $PSScriptRoot --add-dir (Split-Path $PSScriptRoot) 2>&1
+        Log ("[" + $ds + "] claude exit $LASTEXITCODE; " + (($output | Select-Object -Last 3) -join " | "))
+        $todo += $ds
+        if (Test-Path $report) {
+            $settled = $true
+        } else {
+            Log ("[" + $ds + "] no report written, will retry on next run")
+        }
     }
 
-    $output = & claude -p "/daily-digest $ds" --permission-mode acceptEdits 2>&1
-    Log ("[" + $ds + "] claude exit $LASTEXITCODE; " + (($output | Select-Object -Last 3) -join " | "))
-    $todo += $ds
+    if (-not $failed) {
+        if ($settled) { $markTo = $day } else { $failed = $true }
+    }
 }
 
 # ---- 归档（每份新生成的日报各传一次）----
@@ -124,11 +141,15 @@ try {
     Log ("cleanup failed: " + $_.Exception.Message)
 }
 
-# ---- 记标记：跑到哪天就不会再回头 ----
+# ---- 记标记：只推到连续跑通的那天，失败的天留到下次重试 ----
 if (-not $Date) {
-    try {
-        New-Item -ItemType Directory -Force -Path (Split-Path $markFile) | Out-Null
-        @{ last_run_date = $yesterday.ToString("yyyy-MM-dd"); updated = (Get-Date -Format "s") } |
-            ConvertTo-Json | Set-Content $markFile -Encoding utf8
-    } catch { Log ("mark failed: " + $_.Exception.Message) }
+    if ($markTo) {
+        try {
+            New-Item -ItemType Directory -Force -Path (Split-Path $markFile) | Out-Null
+            @{ last_run_date = $markTo.ToString("yyyy-MM-dd"); updated = (Get-Date -Format "s") } |
+                ConvertTo-Json | Set-Content $markFile -Encoding utf8
+        } catch { Log ("mark failed: " + $_.Exception.Message) }
+    } else {
+        Log "marker unchanged (no day settled)"
+    }
 }

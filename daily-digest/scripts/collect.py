@@ -27,6 +27,12 @@ NOISE_PREFIXES = (
     "Caveat:",
 )
 
+# 日报流水线自己的无头 claude 调用（today-summary.ps1）会被当成一次会话收进来，
+# 它的 prompt 里嵌着上一天的摘要，喂回去就成了自我回灌。这类会话整段丢弃。
+PIPELINE_PROMPT_PREFIXES = (
+    "下面是用户今天",
+)
+
 EXCERPT_MARKERS = (
     "所以", "因此", "结论", "根因", "修复了", "已修", "已验证", "验证通过",
     "未完成", "风险", "建议", "关键", "下一步", "最终", "原因", "注意",
@@ -167,6 +173,7 @@ def collect(projects_root, day, config):
                     "tokens": Counter(),
                     "excerpt": [],
                     "excerpt_chars": 0,
+                    "pipeline": False,
                 })
                 session["events"].append(ts)
 
@@ -185,6 +192,9 @@ def collect(projects_root, day, config):
                             break
                         prompt = clean_prompt(block)
                         if not prompt or blocked(prompt):
+                            continue
+                        if prompt.startswith(PIPELINE_PROMPT_PREFIXES):
+                            session["pipeline"] = True
                             continue
                         pid = row.get("promptId")
                         if pid and pid in session["prompt_ids"]:
@@ -230,6 +240,8 @@ def collect(projects_root, day, config):
     out_sessions = []
     hour_minutes = defaultdict(int)
     for session in sessions.values():
+        if session["pipeline"]:
+            continue
         if not session["prompts"] and not session["tools"] and not session["commands"]:
             continue
         events = sorted(session["events"])
