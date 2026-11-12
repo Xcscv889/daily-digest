@@ -39,6 +39,8 @@ class MemoWindow : Window
     static readonly string LogPath = Path.Combine(Dir, "memo.log");
     static readonly string DonePath = Path.Combine(Dir, "done.md");
     static readonly string TodayPath = Path.Combine(Dir, "today.txt");
+    static readonly string CareerDailyDir = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "career-evidence", "daily");
     static readonly string SummaryPath = Path.Combine(Dir, "today-summary.txt");
     static readonly string SummaryScript = Path.Combine(
         Path.GetDirectoryName(Path.GetDirectoryName(typeof(MemoWindow).Assembly.Location) ?? ".") ?? ".", "today-summary.ps1");
@@ -116,10 +118,10 @@ class MemoWindow : Window
 
     DispatcherTimer refreshTimer, autoTimer;
     HwndSource source;
-    DateTime stampDoc = DateTime.MinValue, stampTasks = DateTime.MinValue;
+    DateTime stampDoc = DateTime.MinValue, stampTasks = DateTime.MinValue, stampEvidence = DateTime.MinValue;
 
     bool collapsed, hidden, autoHide = true, voiceWake = true, stateDirty;
-    bool todoCollapsed, doneCollapsed, showDone = true;
+    bool todoCollapsed, doneCollapsed, showDone = true, yesterdayCollapsed = true, evidenceCollapsed = true;
     System.Speech.Recognition.SpeechRecognitionEngine speech;
     DateTime hideAt = DateTime.MaxValue;
     double opacity = 1.0;
@@ -542,7 +544,8 @@ class MemoWindow : Window
         {
             var a = File.Exists(DocPath) ? File.GetLastWriteTimeUtc(DocPath) : DateTime.MinValue;
             var b = File.Exists(TasksPath) ? File.GetLastWriteTimeUtc(TasksPath) : DateTime.MinValue;
-            if (a != stampDoc || b != stampTasks) Render();
+            var c = File.GetLastWriteTimeUtc(Path.Combine(CareerDailyDir, DateTime.Now.ToString("yyyy-MM-dd") + ".md"));
+            if (a != stampDoc || b != stampTasks || c != stampEvidence) Render();
         }
         catch { }
     }
@@ -566,6 +569,7 @@ class MemoWindow : Window
         {
             stampDoc = File.Exists(DocPath) ? File.GetLastWriteTimeUtc(DocPath) : DateTime.MinValue;
             stampTasks = File.Exists(TasksPath) ? File.GetLastWriteTimeUtc(TasksPath) : DateTime.MinValue;
+            stampEvidence = File.GetLastWriteTimeUtc(Path.Combine(CareerDailyDir, DateTime.Now.ToString("yyyy-MM-dd") + ".md"));
 
             bodyPanel.Children.Clear();
 
@@ -628,6 +632,16 @@ class MemoWindow : Window
                 }
             }
 
+            // 1c) 今日留痕（career-evidence 每天生成的记录）
+            var evidence = ReadCareerToday();
+            if (evidence.Count > 0)
+            {
+                AddToggleLabel("今日留痕 · " + evidence.Count + " 条" + (evidenceCollapsed ? "  ▸" : "  ▾"),
+                    delegate { evidenceCollapsed = !evidenceCollapsed; stateDirty = true; SaveState(); Render(); });
+                if (!evidenceCollapsed)
+                    foreach (var line in evidence) AddMutedLine("· " + line);
+            }
+
             // 2) 解析日报：标题 / 摘要 / 今天先问自己
             string title = "";
             string summary = "";
@@ -665,8 +679,10 @@ class MemoWindow : Window
                 if (ago <= 1) head = "昨天 · " + title;
                 else if (ago > 1) head = "上次日报 · " + title + "（" + ago + " 天前）";
                 else head = string.IsNullOrEmpty(title) ? "昨天" : "昨天 · " + title;
-                AddLabel(head);
-                AddMutedLine(summary);
+                AddToggleLabel(head + (yesterdayCollapsed ? "  ▸" : "  ▾"),
+                    delegate { yesterdayCollapsed = !yesterdayCollapsed; stateDirty = true; SaveState(); Render(); });
+                if (!yesterdayCollapsed)
+                    AddMutedLine(summary);
             }
 
             // 4b) 今天的记录还没有
@@ -916,6 +932,29 @@ class MemoWindow : Window
         return list;
     }
 
+    List<string> ReadCareerToday()
+    {
+        var list = new List<string>();
+        try
+        {
+            var path = Path.Combine(CareerDailyDir, DateTime.Now.ToString("yyyy-MM-dd") + ".md");
+            if (!File.Exists(path)) return list;
+            foreach (var raw in File.ReadAllLines(path, Utf8))
+            {
+                var line = raw.Trim();
+                if (!line.StartsWith("- ")) continue;
+                var text = line.Substring(2);
+                int cut = text.IndexOf(" Tags:", StringComparison.Ordinal);
+                if (cut < 0) cut = text.IndexOf(" [Record]", StringComparison.Ordinal);
+                if (cut > 0) text = text.Substring(0, cut);
+                text = text.TrimEnd('.', ' ');
+                if (text.Length > 0) list.Add(text);
+            }
+        }
+        catch { }
+        return list;
+    }
+
     List<string> ReadTodaySummary()
     {
         var list = new List<string>();
@@ -1102,6 +1141,8 @@ class MemoWindow : Window
             showPet = GetBool(json, "ShowPet", false);
             todoCollapsed = GetBool(json, "TodoCollapsed", false);
             doneCollapsed = GetBool(json, "DoneCollapsed", false);
+            yesterdayCollapsed = GetBool(json, "YesterdayCollapsed", true);
+            evidenceCollapsed = GetBool(json, "EvidenceCollapsed", true);
             showDone = GetBool(json, "ShowDone", true);
         }
         catch { }
@@ -1170,6 +1211,8 @@ class MemoWindow : Window
               .Append(",\"ShowPet\":").Append(showPet ? "true" : "false")
               .Append(",\"TodoCollapsed\":").Append(todoCollapsed ? "true" : "false")
               .Append(",\"DoneCollapsed\":").Append(doneCollapsed ? "true" : "false")
+              .Append(",\"YesterdayCollapsed\":").Append(yesterdayCollapsed ? "true" : "false")
+              .Append(",\"EvidenceCollapsed\":").Append(evidenceCollapsed ? "true" : "false")
               .Append(",\"ShowDone\":").Append(showDone ? "true" : "false")
               .Append("}");
             File.WriteAllText(StatePath, sb.ToString(), Utf8);

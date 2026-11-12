@@ -100,7 +100,8 @@ daily-digest/                     插件本体
 - **今天要做的**：来自 `tasks.md` 的未完成项，最多 6 条
 - **今天做了**：优先用 AI 把当天会话概括成 3–4 条；没有概括时退回事实列表（改过哪些文件、问过什么）
 - **今天先问自己**：昨晚生成、今天该回答的三个问题
-- **昨天**：前一天日报的一行摘要，全文在 `days/*.md`
+- **今日留痕**：`~/career-evidence/daily/` 里今天记下的工作条目，默认折叠
+- **昨天**：前一天日报的一行摘要，全文在 `days/*.md`，默认折叠
 
 每个区块标题可点击折叠；「今天做了」可在右键菜单里整段关闭。
 
@@ -142,10 +143,10 @@ csc -nologo -target:winexe -optimize+ ^
 
 `scripts/native/DailyMemoWpf.exe` 是编译产物，提交进仓库是为了免去用户自己装编译器。它由同目录的 `MemoWpf.cs` 编译而来，没有任何依赖，也可以自己重新编译后替换。
 
-SHA256（v4.11.0）：
+SHA256（v4.12.0）：
 
 ```
-8EBF2FFA7E09668295FF4B4956882BB4B4375386F189D6908DC2475445C0599A
+72278A6CB71635304FB41194AEAD57D8DE220E73B040568CF9531735829A49C7
 ```
 
 不想运行现成二进制的话，按上面的命令编译，或改用 `scripts/memo.ps1`（PowerShell 版，功能略旧但代码更好改）。
@@ -162,13 +163,14 @@ SHA256（v4.11.0）：
 | `run-daily.vbs` / `run-weekly.vbs` | 无控制台启动器，计划任务调这两个 |
 | `run-weekly.ps1` | 周报任务 |
 | `ensure-memo.ps1` | 小窗守护：不在就拉起 |
+| `ensure-memo.vbs` | 守护任务的无控制台启动器，计划任务调这个 |
 
 ## 计划任务
 
 | 任务 | 触发 | 作用 |
 |---|---|---|
-| `ClaudeDailyDigest` | 每天 08:00，错过后补跑 | 生成前一天的日报，并把漏掉的天补上 |
-| `ClaudeWeeklyDigest` | 每周日 20:00 | 汇总周报 |
+| `ClaudeDailyDigest` | 每天 08:00；登录后 5 分钟补跑 | 生成前一天的日报，并把漏掉的天补上 |
+| `ClaudeWeeklyDigest` | 每周日 20:00；登录后 5 分钟补跑 | 汇总周报 |
 | `ClaudeMemoWatchdog` | 每 10 分钟 | 小窗没在跑就拉起来 |
 
 **启动方式**：日报和周报任务都通过 `wscript.exe run-daily.vbs` 拉起来，不要在任务里直接调 `pwsh.exe`。两个原因：
