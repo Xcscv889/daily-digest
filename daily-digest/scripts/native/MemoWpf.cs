@@ -58,62 +58,148 @@ class MemoWindow : Window
     const string Xaml = @"
 <Border xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation'
         xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml'
-        CornerRadius='14' Background='#FF0F0D13' BorderBrush='#26FFFFFF' BorderThickness='1'>
+        CornerRadius='18' Background='#FF1C1C1E' BorderBrush='#22FFFFFF' BorderThickness='1'>
   <Grid>
     <Grid.RowDefinitions>
       <RowDefinition Height='Auto'/>
       <RowDefinition Height='*'/>
       <RowDefinition Height='Auto'/>
     </Grid.RowDefinitions>
-    <Grid Name='Header' Grid.Row='0' Height='38' Background='Transparent'>
+    <Grid Name='Header' Grid.Row='0' Height='44' Background='Transparent'>
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width='Auto'/><ColumnDefinition Width='*'/>
         <ColumnDefinition Width='Auto'/><ColumnDefinition Width='Auto'/><ColumnDefinition Width='Auto'/>
       </Grid.ColumnDefinitions>
-      <Ellipse Grid.Column='0' Width='7' Height='7' Margin='16,0,8,0' VerticalAlignment='Center' Fill='#FF74A9D4'/>
+      <Ellipse Name='StatusDot' Grid.Column='0' Width='6' Height='6' Margin='16,0,9,0' VerticalAlignment='Center' Fill='#FF48484A'/>
       <Grid Grid.Column='1'>
-        <TextBlock Name='TitleText' HorizontalAlignment='Left' VerticalAlignment='Center' FontSize='13' FontWeight='SemiBold'
-                   Foreground='#FFE9F0F7' Text='日报' TextTrimming='CharacterEllipsis' MaxWidth='150'/>
-
+        <TextBlock Name='TitleText' HorizontalAlignment='Left' VerticalAlignment='Center' FontSize='13.5' FontWeight='SemiBold'
+                   Foreground='#FFF5F5F7' Text='日报' TextTrimming='CharacterEllipsis' MaxWidth='150'/>
       </Grid>
       <Grid Name='ClockHost' Grid.Column='0' Grid.ColumnSpan='5' HorizontalAlignment='Center'
             VerticalAlignment='Center' IsHitTestVisible='False'/>
-      <TextBlock Name='WeatherText' Grid.Column='2' VerticalAlignment='Center' FontSize='11'
-                 Foreground='#96AABE' Margin='0,0,10,0'/>
+      <TextBlock Name='WeatherText' Grid.Column='2' VerticalAlignment='Center' FontSize='12'
+                 Foreground='#FF98989F' Margin='0,0,10,0'/>
       <Button Name='RefreshBtn' Grid.Column='3' Content='⟳' Width='26' Height='26' Margin='0,0,2,0'
-              Background='Transparent' BorderThickness='0' Foreground='#96AABE' Cursor='Hand' ToolTip='刷新'/>
+              Background='Transparent' BorderThickness='0' Foreground='#FF98989F' Cursor='Hand' ToolTip='刷新'/>
       <Button Name='FoldBtn' Grid.Column='4' Content='–' Width='26' Height='26' Margin='0,0,8,0'
-              Background='Transparent' BorderThickness='0' Foreground='#96AABE' Cursor='Hand' ToolTip='折叠'/>
+              Background='Transparent' BorderThickness='0' Foreground='#FF98989F' Cursor='Hand' ToolTip='折叠'/>
     </Grid>
     <ScrollViewer Name='Body' Grid.Row='1' VerticalScrollBarVisibility='Hidden' HorizontalScrollBarVisibility='Disabled'
                   VerticalAlignment='Stretch'>
-      <StackPanel Name='BodyPanel' Margin='16,0,16,6'/>
+      <StackPanel Name='BodyPanel' Margin='16,2,16,10'/>
     </ScrollViewer>
-    <Grid Grid.Row='2' Name='InputRow' Margin='16,2,16,12'>
-      <TextBox Name='QuickInput' MinHeight='30' MaxHeight='96' FontSize='12.5' Padding='8,5'
+    <Grid Grid.Row='2' Name='InputRow' Margin='16,4,16,14'>
+      <TextBox Name='QuickInput' MinHeight='32' MaxHeight='96' FontSize='13' Padding='10,7'
                TextWrapping='Wrap' AcceptsReturn='True' VerticalScrollBarVisibility='Auto'
-               Background='#22FFFFFF' BorderBrush='#33FFFFFF' Foreground='#FFE9F0F7' CaretBrush='#FFE9F0F7'
+               Background='Transparent' BorderThickness='0' Foreground='#FFF5F5F7' CaretBrush='#FFF5F5F7'
                VerticalContentAlignment='Center'/>
-      <TextBlock Name='QuickHint' Text='记一件事，回车保存' FontSize='12' IsHitTestVisible='False'
-                 Margin='10,0,0,0' VerticalAlignment='Center' Foreground='#96AABE'/>
+      <TextBlock Name='QuickHint' Text='记一件事，回车保存' FontSize='12.5' IsHitTestVisible='False'
+                 Margin='12,0,0,0' VerticalAlignment='Center' Foreground='#FF98989F'/>
     </Grid>
   </Grid>
 </Border>";
 
-    static readonly Brush Ink = new SolidColorBrush(Color.FromRgb(233, 240, 247));
-    static readonly Brush Muted = new SolidColorBrush(Color.FromRgb(150, 170, 190));
-    static readonly Brush Accent = new SolidColorBrush(Color.FromRgb(116, 169, 212));
-    static readonly Brush DoneB = new SolidColorBrush(Color.FromRgb(121, 201, 154));
-    static readonly Brush TodoB = new SolidColorBrush(Color.FromRgb(210, 160, 91));
+    // 右键菜单：跟小窗一致的苹果风（深灰底、12px 圆角、hairline、蓝色勾）
+    const string MenuXaml = @"
+<ResourceDictionary xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation'
+                    xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml'>
+  <Style TargetType='ContextMenu'>
+    <Setter Property='OverridesDefaultStyle' Value='True'/>
+    <Setter Property='HasDropShadow' Value='False'/>
+    <Setter Property='FontFamily' Value='Segoe UI Variable Text, Segoe UI Variable, Segoe UI, Microsoft YaHei UI'/>
+    <Setter Property='FontSize' Value='12.5'/>
+    <Setter Property='Foreground' Value='#FFF5F5F7'/>
+    <Setter Property='Template'>
+      <Setter.Value>
+        <ControlTemplate TargetType='ContextMenu'>
+          <Grid Margin='12'>
+            <Border Background='#F21C1C1E' BorderBrush='#29FFFFFF' BorderThickness='1' CornerRadius='12'>
+              <Border.Effect>
+                <DropShadowEffect BlurRadius='22' ShadowDepth='6' Direction='270' Opacity='0.45' Color='#000000'/>
+              </Border.Effect>
+            </Border>
+            <StackPanel IsItemsHost='True' Margin='6' KeyboardNavigation.DirectionalNavigation='Cycle'/>
+          </Grid>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <Style TargetType='MenuItem'>
+    <Setter Property='OverridesDefaultStyle' Value='True'/>
+    <Setter Property='FontFamily' Value='Segoe UI Variable Text, Segoe UI Variable, Segoe UI, Microsoft YaHei UI'/>
+    <Setter Property='FontSize' Value='12.5'/>
+    <Setter Property='Foreground' Value='#FFF5F5F7'/>
+    <Setter Property='Template'>
+      <Setter.Value>
+        <ControlTemplate TargetType='MenuItem'>
+          <Grid>
+            <Border x:Name='bg' Background='Transparent' CornerRadius='7' Margin='1,1'>
+              <Grid Height='26'>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width='24'/>
+                  <ColumnDefinition Width='*'/>
+                  <ColumnDefinition Width='20'/>
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name='check' Text='✓' FontSize='11.5' FontWeight='SemiBold' Foreground='#FF0A84FF'
+                           HorizontalAlignment='Center' VerticalAlignment='Center' Visibility='Collapsed'/>
+                <ContentPresenter Grid.Column='1' ContentSource='Header' RecognizesAccessKey='False'
+                                  VerticalAlignment='Center' Margin='0,0,10,0'/>
+                <TextBlock x:Name='arrow' Grid.Column='2' Text='›' FontSize='14' Foreground='#FF8E8E93'
+                           HorizontalAlignment='Center' VerticalAlignment='Center' Visibility='Collapsed'/>
+              </Grid>
+            </Border>
+            <Popup x:Name='PART_Popup' AllowsTransparency='True' Focusable='False' PopupAnimation='Fade'
+                   Placement='Right' HorizontalOffset='-6' VerticalOffset='-8'
+                   IsOpen='{TemplateBinding IsSubmenuOpen}'>
+              <Grid Margin='8'>
+                <Border Background='#F21C1C1E' BorderBrush='#29FFFFFF' BorderThickness='1' CornerRadius='12'>
+                  <Border.Effect>
+                    <DropShadowEffect BlurRadius='18' ShadowDepth='5' Direction='270' Opacity='0.45' Color='#000000'/>
+                  </Border.Effect>
+                </Border>
+                <StackPanel IsItemsHost='True' Margin='6'/>
+              </Grid>
+            </Popup>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property='IsHighlighted' Value='True'>
+              <Setter TargetName='bg' Property='Background' Value='#16FFFFFF'/>
+            </Trigger>
+            <Trigger Property='IsChecked' Value='True'>
+              <Setter TargetName='check' Property='Visibility' Value='Visible'/>
+            </Trigger>
+            <Trigger Property='Role' Value='SubmenuHeader'>
+              <Setter TargetName='arrow' Property='Visibility' Value='Visible'/>
+            </Trigger>
+            <Trigger Property='IsEnabled' Value='False'>
+              <Setter Property='Foreground' Value='#FF6E6E73'/>
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+</ResourceDictionary>";
+
+    static readonly Brush Ink = new SolidColorBrush(Color.FromRgb(245, 245, 247));
+    static readonly Brush Muted = new SolidColorBrush(Color.FromRgb(152, 152, 159));
+    static readonly Brush Accent = new SolidColorBrush(Color.FromRgb(10, 132, 255));
+    static readonly Brush DotIdle = new SolidColorBrush(Color.FromRgb(72, 72, 74));
+    static readonly Brush DoneB = new SolidColorBrush(Color.FromRgb(48, 209, 88));
+    static readonly Brush TodoB = new SolidColorBrush(Color.FromRgb(255, 159, 10));
 
     Border card;
     Grid header;
     StackPanel bodyPanel;
+    ScrollViewer body;
     TextBlock titleText, quickHint, weatherText, petText;
-    Clock7 clock7;
+    TextBlock clockText;
+    WeatherGlyph weatherGlyph;
     TextBox quickInput;
     Grid inputRow;
     Button foldBtn, refreshBtn;
+    System.Windows.Shapes.Ellipse statusDot;
     ContextMenu menu;
 
     DispatcherTimer refreshTimer, autoTimer;
@@ -131,6 +217,7 @@ class MemoWindow : Window
     public MemoWindow()
     {
         WindowStyle = WindowStyle.None;
+        FontFamily = new FontFamily("Segoe UI Variable Display, Segoe UI, Microsoft YaHei UI");
         ResizeMode = ResizeMode.NoResize;
         AllowsTransparency = true;
         Background = Brushes.Transparent;
@@ -143,19 +230,53 @@ class MemoWindow : Window
         Content = card;
 
         header = (Grid)card.FindName("Header");
+        body = (ScrollViewer)card.FindName("Body");
         bodyPanel = (StackPanel)card.FindName("BodyPanel");
         titleText = (TextBlock)card.FindName("TitleText");
         weatherText = (TextBlock)card.FindName("WeatherText");
+        weatherText.Margin = new Thickness(0);
+        weatherGlyph = new WeatherGlyph
+        {
+            Width = 16,
+            Height = 16,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 5, 0)
+        };
+        var weatherHost = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 10, 0)
+        };
+        header.Children.Remove(weatherText);
+        weatherHost.Children.Add(weatherGlyph);
+        weatherHost.Children.Add(weatherText);
+        Grid.SetColumn(weatherHost, 2);
+        header.Children.Add(weatherHost);
         var clockHost = (Grid)card.FindName("ClockHost");
-        clock7 = new Clock7();
-        petText = new TextBlock { Foreground = new SolidColorBrush(Color.FromRgb(150, 170, 190)), FontSize = 12, Visibility = Visibility.Collapsed };
-        clockHost.Children.Add(clock7);
+        clockText = new TextBlock
+        {
+            FontFamily = new FontFamily("Segoe UI Variable Display, Segoe UI"),
+            FontSize = 16,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(Color.FromRgb(245, 245, 247)),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        petText = new TextBlock { Foreground = new SolidColorBrush(Color.FromRgb(152, 152, 159)), FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed };
+        clockHost.Children.Add(clockText);
         clockHost.Children.Add(petText);
         quickInput = (TextBox)card.FindName("QuickInput");
         inputRow = (Grid)quickInput.Parent;
+        inputRow.Children.Insert(0, new Border
+        {
+            CornerRadius = new CornerRadius(10),
+            Background = new SolidColorBrush(Color.FromRgb(44, 44, 46)),
+            Margin = new Thickness(0, 1, 0, 1)
+        });
         quickHint = (TextBlock)card.FindName("QuickHint");
         foldBtn = (Button)card.FindName("FoldBtn");
         refreshBtn = (Button)card.FindName("RefreshBtn");
+        statusDot = (System.Windows.Shapes.Ellipse)card.FindName("StatusDot");
 
         BuildMenu();
         LoadState();
@@ -247,21 +368,19 @@ class MemoWindow : Window
         clockTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) };
         clockTimer.Tick += delegate
         {
-            if (clock7 == null) return;
+            if (clockText == null) return;
             if (showPet)
             {
                 petFrame = (petFrame + 1) % PetFrames.Length;
-                clock7.Visibility = Visibility.Collapsed;
+                clockText.Visibility = Visibility.Collapsed;
                 petText.Text = PetFrames[petFrame];
                 petText.Visibility = Visibility.Visible;
             }
             else
             {
                 petText.Visibility = Visibility.Collapsed;
-                clock7.Visibility = Visibility.Visible;
-                clock7.Value = DateTime.Now.ToString("HH:mm");
-                clock7.InvalidateMeasure();
-                clock7.InvalidateVisual();
+                clockText.Visibility = Visibility.Visible;
+                clockText.Text = DateTime.Now.ToString("HH:mm");
             }
         };
         clockTimer.Start();
@@ -321,6 +440,7 @@ class MemoWindow : Window
         System.Threading.ThreadPool.QueueUserWorkItem(delegate
         {
             string text = "";
+            int kind = -1;
             try
             {
                 double lat = 39.90, lon = 116.40;
@@ -334,23 +454,28 @@ class MemoWindow : Window
                 }
                 catch { }
 
-                string url = "https://api.open-meteo.com/v1/forecast?latitude=" + lat.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)
-                    + "&longitude=" + lon.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)
-                    + "&current=temperature_2m,weather_code&timezone=auto";
+                // open-meteo 在国内直连超时，只能走代理；wttr.in 可直连，不依赖 VPN
+                string url = "https://wttr.in/" + lat.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)
+                    + "," + lon.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)
+                    + "?format=j1";
                 var req = (System.Net.HttpWebRequest)System.Net.WebRequest.Create(url);
                 req.Timeout = 8000;
+                req.UserAgent = "DailyMemo/1.0";
                 req.Proxy = null;
                 using (var resp = req.GetResponse())
                 using (var reader = new StreamReader(resp.GetResponseStream(), Encoding.UTF8))
                 {
                     string json = reader.ReadToEnd();
-                    var mTemp = System.Text.RegularExpressions.Regex.Match(json, "\"temperature_2m\":\\s*(-?\\d+(?:\\.\\d+)?)");
-                    var mCode = System.Text.RegularExpressions.Regex.Match(json, "\"weather_code\":\\s*(\\d+)");
+                    var mTemp = System.Text.RegularExpressions.Regex.Match(json, "\"temp_C\"\\s*:\\s*\"(-?\\d+(?:\\.\\d+)?)\"");
+                    var mCode = System.Text.RegularExpressions.Regex.Match(json, "\"weatherCode\"\\s*:\\s*\"(\\d+)\"");
+                    var mDesc = System.Text.RegularExpressions.Regex.Match(json, "\"weatherDesc\"\\s*:\\s*\\[\\s*\\{\\s*\"value\"\\s*:\\s*\"([^\"]*)\"");
                     if (mTemp.Success)
                     {
                         double temp = double.Parse(mTemp.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
                         int code = mCode.Success ? int.Parse(mCode.Groups[1].Value) : -1;
-                        text = WeatherIcon(code) + " " + Math.Round(temp) + "°";
+                        string desc = mDesc.Success ? mDesc.Groups[1].Value : "";
+                        kind = (int)WeatherIcon(code, desc);
+                        text = Math.Round(temp) + "°";
                     }
                 }
             }
@@ -359,23 +484,41 @@ class MemoWindow : Window
             Dispatcher.BeginInvoke((Action)delegate
             {
                 if (weatherText != null) weatherText.Text = text;
+                if (weatherGlyph != null)
+                {
+                    weatherGlyph.Visibility = kind < 0 ? Visibility.Collapsed : Visibility.Visible;
+                    weatherGlyph.Kind = (WeatherKind)kind;
+                }
             });
         });
     }
 
-    static string WeatherIcon(int code)
+    static WeatherKind WeatherIcon(int code, string desc)
     {
-        if (code < 0) return "";
-        if (code == 0 || code == 1) return "☀";
-        if (code == 2) return "⛅";
-        if (code == 3) return "☁";
-        if (code == 45 || code == 48) return "🌫";
-        if (code >= 51 && code <= 67) return "🌧";
-        if (code >= 71 && code <= 77) return "❄";
-        if (code >= 80 && code <= 82) return "🌧";
-        if (code >= 85 && code <= 86) return "❄";
-        if (code >= 95) return "⛈";
-        return "☁";
+        if (code == 113) return WeatherKind.Sun;
+        if (code == 116) return WeatherKind.Partly;
+        if (code == 119) return WeatherKind.Cloud;
+        if (code == 122) return WeatherKind.Overcast;
+        if (code == 143 || code == 248 || code == 260) return WeatherKind.Fog;
+        if (code == 176 || code == 293 || code == 296 || code == 299 || code == 302 || code == 305
+            || code == 308 || code == 353 || code == 356 || code == 359) return WeatherKind.Rain;
+        if (code == 185 || code == 263 || code == 266 || code == 281 || code == 284) return WeatherKind.Drizzle;
+        if (code == 200 || code == 386 || code == 389 || code == 392 || code == 395) return WeatherKind.Thunder;
+        if (code == 179 || code == 227 || code == 230 || code == 323 || code == 326 || (code >= 329 && code <= 338)
+            || code == 368 || code == 371) return WeatherKind.Snow;
+        if (code == 182 || code == 311 || code == 314 || code == 317 || code == 320 || code == 350
+            || code == 362 || code == 365 || code == 374 || code == 377) return WeatherKind.Sleet;
+        // 未知码（如 149 霾）按英文描述兜底
+        string d = (desc ?? "").ToLowerInvariant();
+        if (d.Contains("thunder") || d.Contains("storm")) return WeatherKind.Thunder;
+        if (d.Contains("blizzard") || d.Contains("snow") || d.Contains("ice")) return WeatherKind.Snow;
+        if (d.Contains("sleet")) return WeatherKind.Sleet;
+        if (d.Contains("rain") || d.Contains("shower") || d.Contains("drizzle")) return WeatherKind.Rain;
+        if (d.Contains("fog") || d.Contains("mist") || d.Contains("haze") || d.Contains("smoke")) return WeatherKind.Fog;
+        if (d.Contains("sunny") || d.Contains("clear")) return WeatherKind.Sun;
+        if (d.Contains("overcast")) return WeatherKind.Overcast;
+        if (d.Contains("cloud")) return WeatherKind.Partly;
+        return WeatherKind.Cloud;
     }
 
     static bool InsideButton(DependencyObject node)
@@ -420,7 +563,11 @@ class MemoWindow : Window
 
     void BuildMenu()
     {
+        var skin = (ResourceDictionary)XamlReader.Parse(MenuXaml);
         menu = new ContextMenu();
+        menu.Style = (Style)skin[typeof(ContextMenu)];
+        menu.Resources = skin;
+        menu.HasDropShadow = false;
         menu.Items.Add(Item("刷新", delegate { Render(); }));
         menu.Items.Add(Item("打开全文", delegate { OpenDoc(); }));
         var hide = new MenuItem { Header = "贴边自动隐藏", IsCheckable = true, IsChecked = autoHide };
@@ -452,7 +599,12 @@ class MemoWindow : Window
             opacityMenu.Items.Add(mi);
         }
         menu.Items.Add(opacityMenu);
-        menu.Items.Add(new Separator());
+        menu.Items.Add(new Border
+        {
+            Height = 1,
+            Margin = new Thickness(12, 5, 12, 5),
+            Background = new SolidColorBrush(Color.FromArgb(31, 255, 255, 255))
+        });
         menu.Items.Add(Item("退出", delegate { SaveState(); Close(); }));
     }
 
@@ -482,10 +634,10 @@ class MemoWindow : Window
 
     void UpdateCorners()
     {
-        double tr = snapTop || snapRight ? 0 : 14;
-        double tl = snapTop || snapLeft ? 0 : 14;
-        double br = snapBottom || snapRight ? 0 : 14;
-        double bl = snapBottom || snapLeft ? 0 : 14;
+        double tr = snapTop || snapRight ? 0 : 18;
+        double tl = snapTop || snapLeft ? 0 : 18;
+        double br = snapBottom || snapRight ? 0 : 18;
+        double bl = snapBottom || snapLeft ? 0 : 18;
         card.CornerRadius = new CornerRadius(tl, tr, br, bl);
     }
 
@@ -597,6 +749,10 @@ class MemoWindow : Window
             var aiSummary = showDone ? ReadTodaySummary() : new List<string>();
             bool summaryStale = showDone && aiSummary.Count == 0
                 && (IsStale(SummaryPath) || IsStale(TodayPath));
+            string todayTag = DateTime.Now.ToString("yyyy-MM-dd");
+            bool dotFresh = HeaderDate(SummaryPath) == todayTag || HeaderDate(TodayPath) == todayTag;
+            statusDot.Fill = dotFresh ? Accent : DotIdle;
+            statusDot.ToolTip = dotFresh ? "今天的记录已生成" : "今天还没有记录";
             if (aiSummary.Count > 0)
             {
                 AddToggleLabel("今天做了 · " + aiSummary.Count + " 项" + (doneCollapsed ? "  ▸" : "  ▾"),
@@ -670,7 +826,7 @@ class MemoWindow : Window
                 }
             }
 
-            // 4) 昨天一行摘要（按 current.md 标题里的日期算，不写死「昨天」）
+            // 4) 昨天一行摘要（按 current.md 标题里的日期算，不写死「昨天」）；点标题打开当日全文
             if (summary.Length > 0)
             {
                 DateTime day;
@@ -679,10 +835,9 @@ class MemoWindow : Window
                 if (ago <= 1) head = "昨天 · " + title;
                 else if (ago > 1) head = "上次日报 · " + title + "（" + ago + " 天前）";
                 else head = string.IsNullOrEmpty(title) ? "昨天" : "昨天 · " + title;
-                AddToggleLabel(head + (yesterdayCollapsed ? "  ▸" : "  ▾"),
-                    delegate { yesterdayCollapsed = !yesterdayCollapsed; stateDirty = true; SaveState(); Render(); });
-                if (!yesterdayCollapsed)
-                    AddMutedLine(summary);
+                var target = day;
+                AddToggleLabel(head + "  ↗", delegate { OpenDay(target); });
+                AddMutedLine(summary);
             }
 
             // 4b) 今天的记录还没有
@@ -698,6 +853,7 @@ class MemoWindow : Window
             titleText.Text = now.ToString("M月d日") + " " + wd[(int)now.DayOfWeek];
 
             UpdateHeight();
+            body.ScrollToTop();
             ReapplySnap();
             Log("rendered items=" + bodyPanel.Children.Count + " h=" + Height + " collapsed=" + collapsed + " desired=" + bodyPanel.DesiredSize.Height);
         }
@@ -706,11 +862,11 @@ class MemoWindow : Window
 
     void UpdateHeight()
     {
-        if (collapsed) { Height = 38; return; }
+        if (collapsed) { Height = 44; return; }
         bodyPanel.Measure(new Size(Math.Max(120, Width - 34), double.PositiveInfinity));
         double content = bodyPanel.DesiredSize.Height;
         double maxBody = Math.Max(160, SystemParameters.WorkArea.Height / 2 - 110);
-        Height = 38 + Math.Min(content, maxBody) + 66;
+        Height = 44 + Math.Min(content, maxBody) + 70;
         UpdateLayout();
     }
 
@@ -730,9 +886,9 @@ class MemoWindow : Window
         {
             Text = text,
             Foreground = Muted,
-            FontSize = 12,
+            FontSize = 12.5,
             TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 2, 0, 2)
+            Margin = new Thickness(0, 3, 0, 3)
         });
     }
 
@@ -744,8 +900,8 @@ class MemoWindow : Window
         {
             Text = text,
             Foreground = Ink,
-            FontSize = 12.5,
-            LineHeight = 19,
+            FontSize = 13,
+            LineHeight = 20,
             TextWrapping = TextWrapping.Wrap
         };
         Grid.SetColumn(tb, 1);
@@ -759,8 +915,8 @@ class MemoWindow : Window
         {
             Text = text,
             Foreground = Muted,
-            FontSize = 10.5,
-            Margin = new Thickness(0, 12, 0, 5),
+            FontSize = 11,
+            Margin = new Thickness(0, 16, 0, 6),
             Cursor = Cursors.Hand,
             Background = Brushes.Transparent
         };
@@ -774,8 +930,8 @@ class MemoWindow : Window
         {
             Text = text,
             Foreground = Muted,
-            FontSize = 10.5,
-            Margin = new Thickness(0, 12, 0, 5)
+            FontSize = 11,
+            Margin = new Thickness(0, 16, 0, 6)
         });
     }
 
@@ -787,8 +943,8 @@ class MemoWindow : Window
         {
             Text = text,
             Foreground = Ink,
-            FontSize = 12.5,
-            LineHeight = 19,
+            FontSize = 13,
+            LineHeight = 20,
             TextWrapping = TextWrapping.Wrap
         };
         Grid.SetColumn(tb, 1);
@@ -802,14 +958,14 @@ class MemoWindow : Window
         {
             Text = text,
             Foreground = color,
-            FontSize = 12,
+            FontSize = 12.5,
             VerticalAlignment = VerticalAlignment.Top
         };
     }
 
     static Grid RowGrid(int cols)
     {
-        var g = new Grid { Margin = new Thickness(0, 2, 0, 2), Background = Brushes.Transparent };
+        var g = new Grid { Margin = new Thickness(0, 3, 0, 3), Background = Brushes.Transparent };
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(18) });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         if (cols > 2) g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -825,8 +981,8 @@ class MemoWindow : Window
         {
             Text = t.Text,
             Foreground = t.Done ? Muted : Ink,
-            FontSize = 12.5,
-            LineHeight = 19,
+            FontSize = 13,
+            LineHeight = 20,
             TextWrapping = TextWrapping.Wrap
         };
         Grid.SetColumn(tb, 1);
@@ -1112,6 +1268,8 @@ class MemoWindow : Window
     // ---------- collapse ----------
     void SetCollapsed(bool value)
     {
+        var frames = Environment.StackTrace.Replace("\r", "").Split('\n');
+        Log("collapse=" + value + " at " + (frames.Length > 4 ? frames[3].Trim() + " <- " + frames[4].Trim() : "?"));
         collapsed = value;
         bodyPanel.Visibility = value ? Visibility.Collapsed : Visibility.Visible;
         inputRow.Visibility = value ? Visibility.Collapsed : Visibility.Visible;
@@ -1124,6 +1282,23 @@ class MemoWindow : Window
     {
         try { System.Diagnostics.Process.Start("code", "\"" + DocPath + "\""); }
         catch { try { System.Diagnostics.Process.Start("notepad", "\"" + DocPath + "\""); } catch { } }
+    }
+
+    // 打开某天的完整日报；文件不存在时退回 current.md
+    void OpenDay(DateTime day)
+    {
+        string path = DocPath;
+        if (day != DateTime.MinValue && day != DateTime.MaxValue)
+        {
+            var p = Path.Combine(Dir, "days", day.ToString("yyyy-MM-dd") + ".md");
+            if (File.Exists(p)) path = p;
+        }
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true }); }
+        catch
+        {
+            try { System.Diagnostics.Process.Start("code", "\"" + path + "\""); }
+            catch { try { System.Diagnostics.Process.Start("notepad", "\"" + path + "\""); } catch { } }
+        }
     }
 
     // ---------- state ----------
@@ -1222,67 +1397,145 @@ class MemoWindow : Window
     }
 }
 
-class Clock7 : FrameworkElement
+enum WeatherKind { None, Sun, Partly, Cloud, Overcast, Fog, Rain, Drizzle, Thunder, Snow, Sleet }
+
+class WeatherGlyph : FrameworkElement
 {
-    public string Value = "";
-    static readonly int[] Patterns = new int[] { 63, 6, 91, 79, 102, 109, 125, 7, 127, 111 };
-    static readonly Brush On = Freeze(new SolidColorBrush(Color.FromRgb(140, 225, 175)));
-    static readonly Brush Off = Freeze(new SolidColorBrush(Color.FromArgb(28, 150, 170, 190)));
-
-    static Brush Freeze(Brush b) { b.Freeze(); return b; }
-
-    const double W = 10, H = 18, T = 2.0, GAP = 4.5, COLON = 4;
-
-    double TotalWidth()
+    WeatherKind kind = WeatherKind.None;
+    public WeatherKind Kind
     {
-        double x = 0;
-        foreach (char ch in Value)
-            x += ch == ':' ? COLON + GAP : W + GAP;
-        return Math.Max(0, x - GAP);
+        get { return kind; }
+        set { if (kind != value) { kind = value; InvalidateVisual(); } }
     }
 
-    protected override Size MeasureOverride(Size availableSize)
+    static Brush B(byte r, byte g, byte b)
     {
-        return new Size(TotalWidth(), H);
+        var brush = new SolidColorBrush(Color.FromRgb(r, g, b));
+        brush.Freeze();
+        return brush;
+    }
+
+    static readonly Brush SunB = B(255, 204, 0);
+    static readonly Brush CloudB = B(176, 186, 196);
+    static readonly Brush CloudDark = B(134, 145, 157);
+    static readonly Brush RainB = B(79, 163, 247);
+    static readonly Brush SnowB = B(214, 236, 255);
+    static readonly Pen SunPen = Pen(1.3, SunB);
+    static readonly Pen RainPen = Pen(1.4, RainB);
+    static readonly Pen SnowPen = Pen(1.1, SnowB);
+    static readonly Pen FogPen = Pen(1.2, CloudDark);
+
+    static Pen Pen(double thickness, Brush brush)
+    {
+        var p = new Pen(brush, thickness) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round };
+        p.Freeze();
+        return p;
     }
 
     protected override void OnRender(DrawingContext dc)
     {
-        double x = 0;
-        foreach (char ch in Value)
+        double s = Math.Min(RenderSize.Width, RenderSize.Height) / 16.0;
+        if (s <= 0 || kind == WeatherKind.None) return;
+        dc.PushTransform(new ScaleTransform(s, s));
+        switch (kind)
         {
-            if (ch == ':')
-            {
-                dc.DrawRectangle(On, null, new Rect(x, 4, T, T));
-                dc.DrawRectangle(On, null, new Rect(x, H - 4 - T, T, T));
-                x += COLON + GAP;
-            }
-            else if (ch >= '0' && ch <= '9')
-            {
-                DrawDigit(dc, x, Patterns[ch - '0']);
-                x += W + GAP;
-            }
-            else x += GAP;
+            case WeatherKind.Sun:
+                Sun(dc, 8, 8, 3.3, 4.9, 6.6);
+                break;
+            case WeatherKind.Partly:
+                Sun(dc, 11, 4.8, 2.3, 3.4, 4.5);
+                Cloud(dc, 0, 1.2, CloudB);
+                break;
+            case WeatherKind.Cloud:
+                Cloud(dc, 0, 0, CloudB);
+                break;
+            case WeatherKind.Overcast:
+                Cloud(dc, 1.4, -0.9, CloudDark);
+                Cloud(dc, -0.6, 1.4, CloudB);
+                break;
+            case WeatherKind.Fog:
+                Cloud(dc, 0, -0.8, CloudB);
+                for (int i = 0; i < 3; i++)
+                    dc.DrawLine(FogPen, new Point(3.6, 12.6 + i * 1.5), new Point(12.4, 12.6 + i * 1.5));
+                break;
+            case WeatherKind.Rain:
+                Cloud(dc, 0, -0.8, CloudB);
+                for (int i = 0; i < 3; i++)
+                {
+                    double x = 5.4 + i * 2.6;
+                    dc.DrawLine(RainPen, new Point(x, 12.8), new Point(x - 0.9, 15.4));
+                }
+                break;
+            case WeatherKind.Drizzle:
+                Cloud(dc, 0, -0.8, CloudB);
+                Dot(dc, 5.6, 14, 0.7, RainB);
+                Dot(dc, 8.4, 14.6, 0.7, RainB);
+                Dot(dc, 11.2, 13.8, 0.7, RainB);
+                break;
+            case WeatherKind.Thunder:
+                Cloud(dc, 0, -0.8, CloudB);
+                Bolt(dc);
+                break;
+            case WeatherKind.Snow:
+                Cloud(dc, 0, -0.9, CloudB);
+                Flake(dc, 5.4, 14.1);
+                Flake(dc, 8.4, 14.7);
+                Flake(dc, 11.3, 13.9);
+                break;
+            case WeatherKind.Sleet:
+                Cloud(dc, 0, -0.8, CloudB);
+                Dot(dc, 6.4, 14.4, 0.7, RainB);
+                Flake(dc, 9.6, 14.2);
+                break;
+        }
+        dc.Pop();
+    }
+
+    static void Sun(DrawingContext dc, double cx, double cy, double r, double r1, double r2)
+    {
+        dc.DrawEllipse(SunB, null, new Point(cx, cy), r, r);
+        for (int i = 0; i < 8; i++)
+        {
+            double a = i * Math.PI / 4;
+            double cos = Math.Cos(a), sin = Math.Sin(a);
+            dc.DrawLine(SunPen, new Point(cx + cos * r1, cy + sin * r1), new Point(cx + cos * r2, cy + sin * r2));
         }
     }
 
-    static void DrawDigit(DrawingContext dc, double x, double mask)
+    static void Cloud(DrawingContext dc, double ox, double oy, Brush brush)
     {
-        double midY = (H - T) / 2;
-        double half = (H - T) / 2 - T;
-        int m = (int)mask;
-        Seg(dc, x + T, 0, W - 2 * T, T, (m & 1) != 0);              // a 上
-        Seg(dc, x + W - T, T, T, half, (m & 2) != 0);                // b 右上
-        Seg(dc, x + W - T, (H + T) / 2, T, half, (m & 4) != 0);      // c 右下
-        Seg(dc, x + T, H - T, W - 2 * T, T, (m & 8) != 0);           // d 下
-        Seg(dc, x, (H + T) / 2, T, half, (m & 16) != 0);             // e 左下
-        Seg(dc, x, T, T, half, (m & 32) != 0);                       // f 左上
-        Seg(dc, x + T, midY, W - 2 * T, T, (m & 64) != 0);           // g 中
+        dc.DrawEllipse(brush, null, new Point(5.2 + ox, 9.6 + oy), 3.0, 3.0);
+        dc.DrawEllipse(brush, null, new Point(8.4 + ox, 7.8 + oy), 3.7, 3.7);
+        dc.DrawEllipse(brush, null, new Point(11.5 + ox, 9.5 + oy), 2.6, 2.6);
+        dc.DrawRectangle(brush, null, new Rect(4.6 + ox, 9.0 + oy, 8.7, 3.4));
     }
 
-    static void Seg(DrawingContext dc, double x, double y, double w, double h, bool on)
+    static void Dot(DrawingContext dc, double x, double y, double r, Brush brush)
     {
-        if (!on) return;
-        dc.DrawRectangle(On, null, new Rect(x, y, w, h));
+        dc.DrawEllipse(brush, null, new Point(x, y), r, r);
+    }
+
+    static void Flake(DrawingContext dc, double x, double y)
+    {
+        dc.DrawLine(SnowPen, new Point(x - 1.1, y - 1.1), new Point(x + 1.1, y + 1.1));
+        dc.DrawLine(SnowPen, new Point(x - 1.1, y + 1.1), new Point(x + 1.1, y - 1.1));
+    }
+
+    static void Bolt(DrawingContext dc)
+    {
+        var geo = new StreamGeometry();
+        using (var c = geo.Open())
+        {
+            c.BeginFigure(new Point(8.6, 12.4), true, true);
+            c.LineTo(new Point(6.4, 12.4), true, false);
+            c.LineTo(new Point(8.0, 14.2), true, false);
+            c.LineTo(new Point(7.0, 14.2), true, false);
+            c.LineTo(new Point(8.9, 16.0), true, false);
+            c.LineTo(new Point(8.4, 14.6), true, false);
+            c.LineTo(new Point(9.6, 14.6), true, false);
+        }
+        geo.Freeze();
+        dc.DrawGeometry(SunB, null, geo);
     }
 }
+
