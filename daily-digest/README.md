@@ -49,6 +49,7 @@ daily-digest/                     插件本体
 ├── days/*.md            每天的日报，本地保留 7 天
 ├── weekly/*.md          周报
 ├── state/next.md        次日追问
+├── state/last-run.json  日报补跑标记
 ├── work/                中间产物，3 天后自动清理
 ├── memo.json            小窗位置、透明度、各开关状态
 └── memo.log / run.log   日志
@@ -62,6 +63,14 @@ daily-digest/                     插件本体
   "keep_local_days": 7,
   "exclude_mode": "content_anonymous",
   "exclude_projects": ["MyCompany-Repo"],
+  "exclude_path_patterns": ["(?i)mycompany"],
+  "redact_patterns": ["(?i)(token|password|secret|api[_-]?key)\\s*[:=]\\s*\\S+"],
+  "prompt_max_chars": 800,
+  "assistant_excerpt": {
+    "enabled": true,
+    "max_sentences_per_session": 12,
+    "max_total_chars": 10000
+  },
   "archive": { "driver": "local", "local_path": "D:/DailyDigest" },
   "weather": { "city": "南京", "latitude": 32.06, "longitude": 118.80 }
 }
@@ -77,9 +86,13 @@ daily-digest/                     插件本体
 | `stats_only` | 只保留时间 / 报错数，不采集内容 |
 | `content_anonymous` | 采集内容，但项目名显示为「已排除项目 · A/B/C」，路径里的仓库名会打码 |
 
+`exclude_path_patterns` 按正则匹配路径，命中同样按排除处理；`redact_patterns` 在写入日报前把 token、手机号这类内容替换掉。
+
+**正文抽取**：`prompt_max_chars` 限制每条提问保留多长；`assistant_excerpt` 控制从助手回复里摘多少句结论（默认每会话 12 句、全天 10000 字）。
+
 **归档驱动**：`local` / `baidu`（百度网盘 CLI）/ `rclone` / `notion` / `dingtalk` / `shell`。
 
-**天气**：用 [wttr.in](https://wttr.in/) 免费接口（可直连，不依赖代理/VPN），`weather` 段填你所在城市的经纬度（城市名只是备注）。取不到时显示「天气不可用」，原因写进 `memo.log`。
+**天气**：用 [wttr.in](https://wttr.in/) 免费接口（可直连，不依赖代理/VPN），`weather` 段填你所在城市的经纬度（城市名只是备注），小窗每 30 分钟刷新一次。取不到时显示「天气不可用」，原因写进 `memo.log`。
 
 ## 桌面小窗
 
@@ -88,11 +101,13 @@ daily-digest/                     插件本体
 ### 显示什么
 
 ```
-● 11月6日 周五      17:01    18°   ⟳  –
-今天要做的 · 未完成 2  ▾
-今天做了 · 4 项  ▾
+● 11月17日 周二      14:09    ☁ 15°   ⟳  –
+今天要做的 · 未完成 4  ▾
+今天做了 · 4 项  ▸
+今日留痕 · 2 条  ▸
 今天先问自己
-昨天 · 11月5日 周四（一行摘要）
+昨天 · 11月16日 周一  ↗
+7 小时 49 分 · 5 件完成 · 5 条未完成
 [ 记一件事，回车保存 ]
 ```
 
@@ -119,12 +134,13 @@ daily-digest/                     插件本体
 | 扫过那条边 | 滑回来 |
 | `Ctrl+Alt+N` | 随时唤出并把光标放进输入框 |
 | 说「芝麻开门」 | 语音唤出（Windows 离线识别） |
-| 右键任意位置 | 菜单：刷新今天做了 / 显示今天做了 / 显示小宠物 / 语音唤出 / 贴边自动隐藏 / 透明度 / 刷新 / 打开全文 / 退出 |
+| 右键任意位置 | 菜单：刷新 / 打开全文 / 贴边自动隐藏 / 刷新今天做了（AI）/ 显示「今天做了」/ 显示小宠物 / 语音唤出 / 透明度（100%–60%）/ 退出 |
 
 ### 技术细节
 
 - `scripts/native/DailyMemoWpf.exe`：C# WPF 编译版，约 85 MB 内存（PowerShell 版是 270 MB）
 - 界面用 XAML 字符串在运行时解析，单文件、无依赖，需要 .NET Framework 4.8（Windows 10/11 自带）
+- 小窗和右键菜单各有一份样式字符串（`Xaml` / `MenuXaml`），要改配色改这两处
 - 不可缩放；误触最大化会自动还原成 360 宽
 - 状态只在用户改动时写回 `memo.json`，外部编辑不会被退出覆盖
 
@@ -165,6 +181,7 @@ SHA256（v4.13.0）：
 | `run-weekly.ps1` | 周报任务 |
 | `ensure-memo.ps1` | 小窗守护：不在就拉起 |
 | `ensure-memo.vbs` | 守护任务的无控制台启动器，计划任务调这个 |
+| `memo.ps1` / `memo.vbs` | PowerShell 版小窗，编译版出问题时的退路 |
 
 ## 计划任务
 
@@ -206,6 +223,7 @@ SHA256（v4.13.0）：
 |---|---|
 | 小窗不见了 | `Get-Process DailyMemoWpf`；不在就等 10 分钟守护，或双击启动项 |
 | 小窗藏起来了 | 鼠标扫过屏幕顶部那条 12px，或 `Ctrl+Alt+N`，或说「芝麻开门」 |
+| 小窗只剩一条标题栏 | 点了折叠按钮，点标题栏右端的 `+` 展开 |
 | 天气不可用 | 检查 `config.json` 坐标和网络 |
 | 日报为空 | 确认当天在非排除项目里有会话 |
 | 计划任务失败 | 看 `LastTaskResult`，`0x80070002` 就是 pwsh 路径问题 |
