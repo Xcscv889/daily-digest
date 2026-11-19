@@ -469,12 +469,14 @@ class MemoWindow : Window
                     var mTemp = System.Text.RegularExpressions.Regex.Match(json, "\"temp_C\"\\s*:\\s*\"(-?\\d+(?:\\.\\d+)?)\"");
                     var mCode = System.Text.RegularExpressions.Regex.Match(json, "\"weatherCode\"\\s*:\\s*\"(\\d+)\"");
                     var mDesc = System.Text.RegularExpressions.Regex.Match(json, "\"weatherDesc\"\\s*:\\s*\\[\\s*\\{\\s*\"value\"\\s*:\\s*\"([^\"]*)\"");
+                    var mCloud = System.Text.RegularExpressions.Regex.Match(json, "\"cloudcover\"\\s*:\\s*\"(\\d+)\"");
                     if (mTemp.Success)
                     {
                         double temp = double.Parse(mTemp.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
                         int code = mCode.Success ? int.Parse(mCode.Groups[1].Value) : -1;
                         string desc = mDesc.Success ? mDesc.Groups[1].Value : "";
-                        kind = (int)WeatherIcon(code, desc);
+                        int cloud = mCloud.Success ? int.Parse(mCloud.Groups[1].Value) : -1;
+                        kind = (int)WeatherIcon(code, desc, cloud);
                         text = Math.Round(temp) + "°";
                     }
                 }
@@ -493,12 +495,16 @@ class MemoWindow : Window
         });
     }
 
-    static WeatherKind WeatherIcon(int code, string desc)
+    static WeatherKind WeatherIcon(int code, string desc, int cloud)
     {
+        // 149 = Smoky haze（霾）：wttr.in 常把「晴但空气差」的天报成这个码。
+        // 旧版按 haze→Fog 兜底成「云+三条杠」，晴天却显示成云团就是这个原因。
+        // 16px 画不下霾层，云量低时直接给太阳（霾天太阳确实在），云量高才当雾。
         if (code == 113) return WeatherKind.Sun;
-        if (code == 116) return WeatherKind.Partly;
-        if (code == 119) return WeatherKind.Cloud;
-        if (code == 122) return WeatherKind.Overcast;
+        if (code == 116) return cloud >= 0 && cloud < 15 ? WeatherKind.Sun : WeatherKind.Partly;
+        if (code == 119) return cloud >= 0 && cloud < 45 ? WeatherKind.Partly : WeatherKind.Cloud;
+        if (code == 122) return cloud >= 0 && cloud < 70 ? WeatherKind.Cloud : WeatherKind.Overcast;
+        if (code == 149) return cloud >= 50 ? WeatherKind.Fog : WeatherKind.Sun;
         if (code == 143 || code == 248 || code == 260) return WeatherKind.Fog;
         if (code == 176 || code == 293 || code == 296 || code == 299 || code == 302 || code == 305
             || code == 308 || code == 353 || code == 356 || code == 359) return WeatherKind.Rain;
@@ -508,13 +514,15 @@ class MemoWindow : Window
             || code == 368 || code == 371) return WeatherKind.Snow;
         if (code == 182 || code == 311 || code == 314 || code == 317 || code == 320 || code == 350
             || code == 362 || code == 365 || code == 374 || code == 377) return WeatherKind.Sleet;
-        // 未知码（如 149 霾）按英文描述兜底
+        // 未知码按英文描述兜底；霾/烟/沙尘要和雾分开，不能都画成云
         string d = (desc ?? "").ToLowerInvariant();
         if (d.Contains("thunder") || d.Contains("storm")) return WeatherKind.Thunder;
         if (d.Contains("blizzard") || d.Contains("snow") || d.Contains("ice")) return WeatherKind.Snow;
         if (d.Contains("sleet")) return WeatherKind.Sleet;
         if (d.Contains("rain") || d.Contains("shower") || d.Contains("drizzle")) return WeatherKind.Rain;
-        if (d.Contains("fog") || d.Contains("mist") || d.Contains("haze") || d.Contains("smoke")) return WeatherKind.Fog;
+        if (d.Contains("haze") || d.Contains("smoke") || d.Contains("dust") || d.Contains("sand"))
+            return cloud >= 50 ? WeatherKind.Fog : WeatherKind.Sun;
+        if (d.Contains("fog") || d.Contains("mist")) return WeatherKind.Fog;
         if (d.Contains("sunny") || d.Contains("clear")) return WeatherKind.Sun;
         if (d.Contains("overcast")) return WeatherKind.Overcast;
         if (d.Contains("cloud")) return WeatherKind.Partly;
@@ -1420,10 +1428,10 @@ class WeatherGlyph : FrameworkElement
     static readonly Brush CloudDark = B(134, 145, 157);
     static readonly Brush RainB = B(79, 163, 247);
     static readonly Brush SnowB = B(214, 236, 255);
-    static readonly Pen SunPen = Pen(1.3, SunB);
-    static readonly Pen RainPen = Pen(1.4, RainB);
-    static readonly Pen SnowPen = Pen(1.1, SnowB);
-    static readonly Pen FogPen = Pen(1.2, CloudDark);
+    static readonly Pen SunPen = Pen(1.25, SunB);
+    static readonly Pen RainPen = Pen(1.5, RainB);
+    static readonly Pen SnowPen = Pen(1.25, SnowB);
+    static readonly Pen FogPen = Pen(1.15, CloudDark);
 
     static Pen Pen(double thickness, Brush brush)
     {
@@ -1443,49 +1451,48 @@ class WeatherGlyph : FrameworkElement
                 Sun(dc, 8, 8, 3.3, 4.9, 6.6);
                 break;
             case WeatherKind.Partly:
-                Sun(dc, 11, 4.8, 2.3, 3.4, 4.5);
-                Cloud(dc, 0, 1.2, CloudB);
+                Sun(dc, 10.7, 4.6, 2.3, 3.4, 4.5);
+                Cloud(dc, 0.2, 1.2, CloudB);
                 break;
             case WeatherKind.Cloud:
-                Cloud(dc, 0, 0, CloudB);
+                Cloud(dc, 0.2, 0.35, CloudB);
                 break;
             case WeatherKind.Overcast:
-                Cloud(dc, 1.4, -0.9, CloudDark);
-                Cloud(dc, -0.6, 1.4, CloudB);
+                Cloud(dc, 1.7, -0.1, CloudDark);
+                Cloud(dc, -0.5, 1.2, CloudB);
                 break;
             case WeatherKind.Fog:
-                Cloud(dc, 0, -0.8, CloudB);
-                for (int i = 0; i < 3; i++)
-                    dc.DrawLine(FogPen, new Point(3.6, 12.6 + i * 1.5), new Point(12.4, 12.6 + i * 1.5));
+                Cloud(dc, 0.2, -1.1, CloudB);
+                Bar(dc, FogPen, 12.9);
                 break;
             case WeatherKind.Rain:
-                Cloud(dc, 0, -0.8, CloudB);
+                Cloud(dc, 0.2, -1.1, CloudB);
                 for (int i = 0; i < 3; i++)
                 {
-                    double x = 5.4 + i * 2.6;
-                    dc.DrawLine(RainPen, new Point(x, 12.8), new Point(x - 0.9, 15.4));
+                    double x = 6.0 + i * 2.3;
+                    dc.DrawLine(RainPen, new Point(x, 12.4), new Point(x - 1.0, 15.4));
                 }
                 break;
             case WeatherKind.Drizzle:
-                Cloud(dc, 0, -0.8, CloudB);
-                Dot(dc, 5.6, 14, 0.7, RainB);
-                Dot(dc, 8.4, 14.6, 0.7, RainB);
-                Dot(dc, 11.2, 13.8, 0.7, RainB);
+                Cloud(dc, 0.2, -1.1, CloudB);
+                Dot(dc, 5.9, 13.3, 0.75, RainB);
+                Dot(dc, 8.3, 14.4, 0.75, RainB);
+                Dot(dc, 10.7, 13.3, 0.75, RainB);
                 break;
             case WeatherKind.Thunder:
-                Cloud(dc, 0, -0.8, CloudB);
+                Cloud(dc, 0.2, -1.1, CloudB);
                 Bolt(dc);
                 break;
             case WeatherKind.Snow:
-                Cloud(dc, 0, -0.9, CloudB);
-                Flake(dc, 5.4, 14.1);
-                Flake(dc, 8.4, 14.7);
-                Flake(dc, 11.3, 13.9);
+                Cloud(dc, 0.2, -1.1, CloudB);
+                Flake(dc, 6.0, 13.5, 1.0);
+                Flake(dc, 8.3, 14.4, 1.0);
+                Flake(dc, 10.6, 13.5, 1.0);
                 break;
             case WeatherKind.Sleet:
-                Cloud(dc, 0, -0.8, CloudB);
-                Dot(dc, 6.4, 14.4, 0.7, RainB);
-                Flake(dc, 9.6, 14.2);
+                Cloud(dc, 0.2, -1.1, CloudB);
+                Dot(dc, 6.3, 13.9, 0.75, RainB);
+                Flake(dc, 9.7, 13.6, 1.0);
                 break;
         }
         dc.Pop();
@@ -1502,12 +1509,20 @@ class WeatherGlyph : FrameworkElement
         }
     }
 
+    // 底边固定在 11.3（旧版是 12.4），给下面的雨丝/雪花/雾线留出空隙，
+    // 否则 16px 下会糊成「云压着三条杠」的纸杯形状
     static void Cloud(DrawingContext dc, double ox, double oy, Brush brush)
     {
-        dc.DrawEllipse(brush, null, new Point(5.2 + ox, 9.6 + oy), 3.0, 3.0);
-        dc.DrawEllipse(brush, null, new Point(8.4 + ox, 7.8 + oy), 3.7, 3.7);
-        dc.DrawEllipse(brush, null, new Point(11.5 + ox, 9.5 + oy), 2.6, 2.6);
-        dc.DrawRectangle(brush, null, new Rect(4.6 + ox, 9.0 + oy, 8.7, 3.4));
+        dc.DrawEllipse(brush, null, new Point(5.3 + ox, 8.8 + oy), 2.7, 2.7);
+        dc.DrawEllipse(brush, null, new Point(8.4 + ox, 7.2 + oy), 3.2, 3.2);
+        dc.DrawEllipse(brush, null, new Point(11.2 + ox, 8.9 + oy), 2.2, 2.2);
+        dc.DrawRectangle(brush, null, new Rect(4.9 + ox, 8.3 + oy, 8.2, 3.0));
+    }
+
+    static void Bar(DrawingContext dc, Pen pen, double y)
+    {
+        dc.DrawLine(pen, new Point(3.0, y), new Point(13.0, y));
+        dc.DrawLine(pen, new Point(4.6, y + 2.3), new Point(11.4, y + 2.3));
     }
 
     static void Dot(DrawingContext dc, double x, double y, double r, Brush brush)
@@ -1515,10 +1530,10 @@ class WeatherGlyph : FrameworkElement
         dc.DrawEllipse(brush, null, new Point(x, y), r, r);
     }
 
-    static void Flake(DrawingContext dc, double x, double y)
+    static void Flake(DrawingContext dc, double x, double y, double r)
     {
-        dc.DrawLine(SnowPen, new Point(x - 1.1, y - 1.1), new Point(x + 1.1, y + 1.1));
-        dc.DrawLine(SnowPen, new Point(x - 1.1, y + 1.1), new Point(x + 1.1, y - 1.1));
+        dc.DrawLine(SnowPen, new Point(x - r, y - r), new Point(x + r, y + r));
+        dc.DrawLine(SnowPen, new Point(x - r, y + r), new Point(x + r, y - r));
     }
 
     static void Bolt(DrawingContext dc)
@@ -1526,13 +1541,13 @@ class WeatherGlyph : FrameworkElement
         var geo = new StreamGeometry();
         using (var c = geo.Open())
         {
-            c.BeginFigure(new Point(8.6, 12.4), true, true);
-            c.LineTo(new Point(6.4, 12.4), true, false);
-            c.LineTo(new Point(8.0, 14.2), true, false);
-            c.LineTo(new Point(7.0, 14.2), true, false);
-            c.LineTo(new Point(8.9, 16.0), true, false);
-            c.LineTo(new Point(8.4, 14.6), true, false);
-            c.LineTo(new Point(9.6, 14.6), true, false);
+            c.BeginFigure(new Point(9.0, 11.8), true, true);
+            c.LineTo(new Point(6.6, 11.8), true, false);
+            c.LineTo(new Point(8.2, 13.9), true, false);
+            c.LineTo(new Point(7.1, 13.9), true, false);
+            c.LineTo(new Point(9.0, 15.8), true, false);
+            c.LineTo(new Point(8.5, 14.2), true, false);
+            c.LineTo(new Point(9.9, 14.2), true, false);
         }
         geo.Freeze();
         dc.DrawGeometry(SunB, null, geo);
