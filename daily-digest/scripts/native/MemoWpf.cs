@@ -29,7 +29,7 @@ class MemoApp : Application
     }
 }
 
-class MemoWindow : Window
+partial class MemoWindow : Window
 {
     const string Root = @".daily-digest";
     static readonly string Dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), Root);
@@ -68,20 +68,23 @@ class MemoWindow : Window
     <Grid Name='Header' Grid.Row='0' Height='44' Background='Transparent'>
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width='Auto'/><ColumnDefinition Width='*'/>
-        <ColumnDefinition Width='Auto'/><ColumnDefinition Width='Auto'/><ColumnDefinition Width='Auto'/>
+        <ColumnDefinition Width='Auto'/><ColumnDefinition Width='Auto'/><ColumnDefinition Width='Auto'/><ColumnDefinition Width='Auto'/>
       </Grid.ColumnDefinitions>
       <Ellipse Name='StatusDot' Grid.Column='0' Width='6' Height='6' Margin='16,0,9,0' VerticalAlignment='Center' Fill='#FF48484A'/>
       <Grid Grid.Column='1'>
         <TextBlock Name='TitleText' HorizontalAlignment='Left' VerticalAlignment='Center' FontSize='13.5' FontWeight='SemiBold'
                    Foreground='#FFF5F5F7' Text='日报' TextTrimming='CharacterEllipsis' MaxWidth='150'/>
       </Grid>
-      <Grid Name='ClockHost' Grid.Column='0' Grid.ColumnSpan='5' HorizontalAlignment='Center'
+      <Grid Name='ClockHost' Grid.Column='0' Grid.ColumnSpan='6' HorizontalAlignment='Center'
             VerticalAlignment='Center' IsHitTestVisible='False'/>
       <TextBlock Name='WeatherText' Grid.Column='2' VerticalAlignment='Center' FontSize='12'
                  Foreground='#FF98989F' Margin='0,0,10,0'/>
-      <Button Name='RefreshBtn' Grid.Column='3' Content='⟳' Width='26' Height='26' Margin='0,0,2,0'
+      <Button Name='ChatBtn' Grid.Column='3' Content='☺' Width='26' Height='26' Margin='0,0,2,0'
+              Background='Transparent' BorderThickness='0' Foreground='#FF98989F' Cursor='Hand'
+              FontSize='15' ToolTip='和小臻聊聊（Ctrl+Alt+J）'/>
+      <Button Name='RefreshBtn' Grid.Column='4' Content='⟳' Width='26' Height='26' Margin='0,0,2,0'
               Background='Transparent' BorderThickness='0' Foreground='#FF98989F' Cursor='Hand' ToolTip='刷新'/>
-      <Button Name='FoldBtn' Grid.Column='4' Content='–' Width='26' Height='26' Margin='0,0,8,0'
+      <Button Name='FoldBtn' Grid.Column='5' Content='–' Width='26' Height='26' Margin='0,0,8,0'
               Background='Transparent' BorderThickness='0' Foreground='#FF98989F' Cursor='Hand' ToolTip='折叠'/>
     </Grid>
     <ScrollViewer Name='Body' Grid.Row='1' VerticalScrollBarVisibility='Hidden' HorizontalScrollBarVisibility='Disabled'
@@ -198,7 +201,7 @@ class MemoWindow : Window
     WeatherGlyph weatherGlyph;
     TextBox quickInput;
     Grid inputRow;
-    Button foldBtn, refreshBtn;
+    Button foldBtn, refreshBtn, chatBtn;
     System.Windows.Shapes.Ellipse statusDot;
     ContextMenu menu;
 
@@ -213,6 +216,24 @@ class MemoWindow : Window
     double opacity = 1.0;
     bool snapTop, snapRight, snapBottom, snapLeft;
     bool dragging;
+    bool hkN, hkJ;
+    int hotkeyTries;
+
+    // 启动时可能和上一个实例抢快捷键，失败就隔 5 秒重试几次
+    void EnsureHotkeys()
+    {
+        var handle = new WindowInteropHelper(this).Handle;
+        if (!hkN) { try { hkN = RegisterHotKey(handle, 1, 3, (uint)Key.N); } catch { } }
+        if (!hkJ) { try { hkJ = RegisterHotKey(handle, 2, 3, (uint)Key.J); } catch { } }
+        Log("hotkeys N=" + hkN + " J=" + hkJ);
+        if ((!hkN || !hkJ) && hotkeyTries < 12)
+        {
+            hotkeyTries++;
+            var t = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+            t.Tick += delegate { t.Stop(); EnsureHotkeys(); };
+            t.Start();
+        }
+    }
 
     public MemoWindow()
     {
@@ -276,10 +297,13 @@ class MemoWindow : Window
         quickHint = (TextBlock)card.FindName("QuickHint");
         foldBtn = (Button)card.FindName("FoldBtn");
         refreshBtn = (Button)card.FindName("RefreshBtn");
+        chatBtn = (Button)card.FindName("ChatBtn");
+        chatBtn.Click += delegate { ToggleChat(); };
         statusDot = (System.Windows.Shapes.Ellipse)card.FindName("StatusDot");
 
         BuildMenu();
         LoadState();
+        InitCompanion();
 
         header.MouseLeftButtonDown += delegate(object s, MouseButtonEventArgs e)
         {
@@ -335,7 +359,7 @@ class MemoWindow : Window
             Render();
             source = (HwndSource)PresentationSource.FromVisual(this);
             source.AddHook(WndProc);
-            try { RegisterHotKey(new WindowInteropHelper(this).Handle, 1, 3, (uint)Key.N); } catch { }
+            EnsureHotkeys();
             StartClock();
             RefreshLive();
             var summaryBoot = new DispatcherTimer { Interval = TimeSpan.FromSeconds(25) };
@@ -353,7 +377,7 @@ class MemoWindow : Window
             weatherTimer.Tick += delegate { LoadWeather(); };
             weatherTimer.Start();
         };
-        Closed += delegate { StopVoice(); try { UnregisterHotKey(new WindowInteropHelper(this).Handle, 1); } catch { } SaveState(); };
+        Closed += delegate { StopVoice(); try { UnregisterHotKey(new WindowInteropHelper(this).Handle, 1); } catch { } try { UnregisterHotKey(new WindowInteropHelper(this).Handle, 2); } catch { } SaveState(); };
     }
 
     bool showPet;
@@ -485,6 +509,7 @@ class MemoWindow : Window
 
             Dispatcher.BeginInvoke((Action)delegate
             {
+                weatherKindNow = kind;
                 if (weatherText != null) weatherText.Text = text;
                 if (weatherGlyph != null)
                 {
@@ -543,6 +568,12 @@ class MemoWindow : Window
     {
         if (msg == WM_HOTKEY)
         {
+            if (wParam.ToInt32() == 2)
+            {
+                ToggleChat();
+                handled = true;
+                return IntPtr.Zero;
+            }
             SetCollapsed(false);
             ShowWindow();
             try
@@ -578,6 +609,14 @@ class MemoWindow : Window
         menu.HasDropShadow = false;
         menu.Items.Add(Item("刷新", delegate { Render(); }));
         menu.Items.Add(Item("打开全文", delegate { OpenDoc(); }));
+        chatMenuItem = Item("和小臻聊聊", delegate { ToggleChat(); });
+        menu.Items.Add(chatMenuItem);
+        menu.Items.Add(Item("陪伴设置…", delegate { OpenSettings(); }));
+        menu.Items.Add(Item("她记得的事…", delegate { OpenMemoryWindow(); }));
+        proactiveMenu = new MenuItem { Header = "主动关心", IsCheckable = true, IsChecked = true };
+        proactiveMenu.Click += delegate { SetProactive(proactiveMenu.IsChecked); };
+        menu.Items.Add(proactiveMenu);
+        menu.Items.Add(Item("试一句主动关心", delegate { TestProactive(); }));
         var hide = new MenuItem { Header = "贴边自动隐藏", IsCheckable = true, IsChecked = autoHide };
         hide.Click += delegate { autoHide = hide.IsChecked; if (!autoHide) ShowWindow(); stateDirty = true; SaveState(); };
         menu.Items.Add(hide);
@@ -647,6 +686,7 @@ class MemoWindow : Window
         double br = snapBottom || snapRight ? 0 : 18;
         double bl = snapBottom || snapLeft ? 0 : 18;
         card.CornerRadius = new CornerRadius(tl, tr, br, bl);
+        SyncChatCorners();
     }
 
     bool Docked { get { return snapTop || snapBottom || snapLeft || snapRight; } }
@@ -871,6 +911,7 @@ class MemoWindow : Window
     void UpdateHeight()
     {
         if (collapsed) { Height = 44; return; }
+        if (chatting) { Height = ChatHeight(); UpdateLayout(); ReapplySnap(); return; }
         bodyPanel.Measure(new Size(Math.Max(120, Width - 34), double.PositiveInfinity));
         double content = bodyPanel.DesiredSize.Height;
         double maxBody = Math.Max(160, SystemParameters.WorkArea.Height / 2 - 110);
@@ -1276,6 +1317,7 @@ class MemoWindow : Window
     // ---------- collapse ----------
     void SetCollapsed(bool value)
     {
+        if (value) HideChatForCollapse();
         var frames = Environment.StackTrace.Replace("\r", "").Split('\n');
         Log("collapse=" + value + " at " + (frames.Length > 4 ? frames[3].Trim() + " <- " + frames[4].Trim() : "?"));
         collapsed = value;

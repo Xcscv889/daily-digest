@@ -137,13 +137,64 @@ daily-digest/                     插件本体
 | 贴边后鼠标离开 3 秒 | 收起，只在边缘留 12px |
 | 扫过那条边 | 滑回来 |
 | `Ctrl+Alt+N` | 随时唤出并把光标放进输入框 |
+| `Ctrl+Alt+J` / 点标题栏 ☺ | 打开「小臻」陪伴对话 |
 | 说「芝麻开门」 | 语音唤出（Windows 离线识别） |
-| 右键任意位置 | 菜单：刷新 / 打开全文 / 贴边自动隐藏 / 刷新今天做了（AI）/ 显示「今天做了」/ 显示小宠物 / 语音唤出 / 透明度（100%–60%）/ 退出 |
+| 右键任意位置 | 菜单：刷新 / 打开全文 / 和小臻聊聊 / 陪伴设置… / 贴边自动隐藏 / 刷新今天做了（AI）/ 显示「今天做了」/ 显示小宠物 / 语音唤出 / 透明度（100%–60%）/ 退出 |
+
+### 陪伴模式（小臻）
+
+小窗里住着一个陪伴角色，默认叫「小臻」。她只关心人，不催工作。
+
+- 点标题栏的 ☺、按 `Ctrl+Alt+J`，或右键「和小臻聊聊」打开；左上角 `‹` 或 `Esc` 返回
+- 如果打开聊天前小窗是折叠的，点 `‹` 会**一步折回去**，不用再按一次折叠
+- 第一次使用先在「陪伴设置…」里填 API Key（OpenAI 兼容接口，默认 DeepSeek）
+- Key 用 Windows DPAPI 加密成 `~/.daily-digest/companion/key.dat`，只能本机、本用户解开；换机器要重填
+- 对话记录在 `~/.daily-digest/companion/chat/yyyy-MM-dd.jsonl`，启动时带入当天最近 10 条
+- 设置项：头像、名字、声音、API 地址、模型、API Key、代理（留空直连 / `system` 系统代理 / `http://...`）
+- 头像读 `~/.daily-digest/companion/avatar.png`，设置里「更换头像…」会复制进来；没有图就用内置小像
+- 开源分发只带代码，不带 `companion/` 目录和 `avatar.png`；使用者填自己的 Key 和头像
+
+#### 语音播报（P1）
+
+- 声音来自 Edge 朗读接口，默认 **台湾 · 晓臻**（`zh-TW-HsiaoChenNeural`），设置里点一下就换（晓臻 / 晓雨 / 大陆晓晓），旁边有「试听」
+- 聊天标题栏的 🔊 是播报开关；**发送新消息会立刻打断**正在播的内容
+- 模型一边输出、小窗一边按句合成，句子之间并行；首句大约 4 秒出声，之后连续
+- 合成走本地 Python 版 edge-tts，不逆向微软的鉴权。首次使用先装一次：
+
+```
+python -m venv %USERPROFILE%\.daily-digest\tts
+%USERPROFILE%\.daily-digest\tts\Scripts\pip install edge-tts
+```
+
+- 装好后不需要配置；找不到时自动退回 Windows 自带语音（只有大陆音色，音质一般）
+- 微软改接口时 `pip install -U edge-tts` 升级即可，不用重新编译小窗
+
+#### 主动关心（P3）
+
+- 她会在四种情况下主动开口：早上第一次、连续坐着约 100 分钟、外面下雨、23 点后
+- 限制：每天最多 4 次、两次至少隔 90 分钟、23:30–08:00 完全静默、全屏应用时不打扰、2 分钟没动键鼠不打扰
+- 聊天没开时，工具栏头像右上角会有一个小蓝点；点开聊天就能看到那条消息，不会丢
+- 右键菜单「主动关心」可整体关闭；「试一句主动关心」能立刻看效果（不占次数）
+- 内容优先由模型生成（非流式），没填 Key 或失败时用内置文案
+- 开关和计数存在 `~/.daily-digest/companion/state.json`
+
+#### 长期记忆（P4）
+
+目标：记忆一直有用，但**每条消息的 token 和延迟恒定**。完整设计见 `docs/companion-memory.md`。
+
+- 文件：`profile.md`（手写画像，常驻）、`memories.jsonl`（活跃记忆，≤500 条）、`archive.jsonl`（归档，只增不删）、`chat/`（原始对话，不直接进请求）
+- **写入不打分**：每天后台提取一次，模型只输出 `ADD|kind|text` 或 `SUPERSEDE|kind|text|旧编号`；冲突的旧条标 `valid=0` 保留历史
+- **检索**：本地 BM25 + 新鲜度 + 使用次数，取前 3 条；命中即 `uses++`
+- **预算**：人设 + 画像 + 3 条记忆 + 最近对话，总输入 ≤1600 字；只砍记忆和旧对话，当前消息永远保留
+- **上限**：活跃 500 条，超出移入 `archive.jsonl`；每周把相近的几条合并成更概括的事实
+- 右键「她记得的事…」可以逐条查看、钉住、忘记，或手动整理/合并
+- 每次请求会写一行 `prompt: sys=... turns=... chars=...` 日志，用来观察有没有变慢
 
 ### 技术细节
 
-- `scripts/native/DailyMemoWpf.exe`：C# WPF 编译版，约 85 MB 内存（PowerShell 版是 270 MB）
+- `scripts/native/DailyMemoWpf.exe`：C# WPF 编译版，约 85–105 MB 内存（PowerShell 版是 270 MB）
 - 界面用 XAML 字符串在运行时解析，单文件、无依赖，需要 .NET Framework 4.8（Windows 10/11 自带）
+- 陪伴模块在 `Companion.cs`，长期记忆在 `CompanionMemory.cs`，和 `MemoWpf.cs` 是同一个 `partial class MemoWindow`
 - 小窗和右键菜单各有一份样式字符串（`Xaml` / `MenuXaml`），要改配色改这两处
 - 不可缩放；误触最大化会自动还原成 360 宽
 - 状态只在用户改动时写回 `memo.json`，外部编辑不会被退出覆盖
@@ -157,12 +208,14 @@ csc -nologo -target:winexe -optimize+ ^
   -r:"%WINDIR%\Microsoft.NET\assembly\GAC_MSIL\WindowsBase\v4.0_4.0.0.0__31bf3856ad364e35\WindowsBase.dll" ^
   -r:"%WINDIR%\Microsoft.NET\assembly\GAC_MSIL\System.Xaml\v4.0_4.0.0.0__b77a5c561934e089\System.Xaml.dll" ^
   -r:"%WINDIR%\Microsoft.NET\assembly\GAC_MSIL\System.Speech\v4.0_4.0.0.0__31bf3856ad364e35\System.Speech.dll" ^
-  -out:DailyMemoWpf.exe MemoWpf.cs
+  -out:DailyMemoWpf.exe MemoWpf.cs Companion.cs CompanionMemory.cs
 ```
+
+> `System.Security`（DPAPI）和 `System.Web.Extensions`（JSON）由 csc 默认引用，不用再 `-r`；重复引用会报 CS1703。
 
 ### 关于仓库里的 exe
 
-`scripts/native/DailyMemoWpf.exe` 是编译产物，提交进仓库是为了免去用户自己装编译器。它由同目录的 `MemoWpf.cs` 编译而来，没有任何依赖，也可以自己重新编译后替换。
+`scripts/native/DailyMemoWpf.exe` 是编译产物，提交进仓库是为了免去用户自己装编译器。它由同目录的 `MemoWpf.cs` + `Companion.cs` + `CompanionMemory.cs` 编译而来，没有任何依赖，也可以自己重新编译后替换。
 
 SHA256（v4.14.0）：
 
